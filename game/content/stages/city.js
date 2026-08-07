@@ -1,7 +1,7 @@
 /* Stage: SKYLINE CITY - game/content/stages/city.js
-   Pattern: theme (neon) + objects ['full night star sky', 'static skyline towers', 'neon signs + billboards', 'elevated monorail', 'utility cables', 'storefronts', 'wet neon street', 'street life'] + unique feature: a dense vertical neon canyon pressing in on both flanks.
+   Pattern: theme (neon) + objects ['full night star sky', 'static skyline towers', 'neon signs + billboards', 'elevated maglev line', 'utility cables', 'storefronts', 'wet neon street', 'street life'] + unique feature: a dense vertical neon canyon pressing in on both flanks.
    Registered via the shared API - rotation, names and build dispatch pick it up. */
-registerStage('city', { name: 'SKYLINE CITY', theme: 'neon', rotation: 'normal', objects: ['star night sky', 'static skyline towers', 'neon signs + billboards', 'monorail + cables', 'storefronts', 'wet neon street', 'street life'], feature: 'a dense neon canyon pressing in on both flanks' }, buildStageCity);
+registerStage('city', { name: 'SKYLINE CITY', theme: 'neon', rotation: 'normal', objects: ['star night sky', 'static skyline towers', 'neon signs + billboards', 'maglev line + cables', 'storefronts', 'wet neon street', 'street life'], feature: 'a dense neon canyon pressing in on both flanks' }, buildStageCity);
 
 function drawCityCell(src, bright) {
   const cell = src.cell;
@@ -210,27 +210,114 @@ function buildStageCity(P) {
     ctx.fillStyle = '#ffffff'; ctx.fillRect(30, 30, 20, 20);
   });
   iconSign.position.set(CW * 0.68, CH * 0.44, farZ + 150);
-  /* --- Elevated monorail + lit train crossing the skyline (static) --- */
+  /* --- Elevated maglev line: a sleek futuristic shuttle glides the skyline,
+     shuttling between two glowing stations (ambient motion, like the street life). --- */
   const railZ = farZ + 130, railY = CH * 0.78;
-  const track = new THREE.Mesh(new THREE.BoxGeometry(CW + 560, 3.6, 6), mat(silNear));
+  const railLen = CW + 640;
+  const railX0 = CW / 2 - railLen / 2, railX1 = CW / 2 + railLen / 2;
+  const track = new THREE.Mesh(new THREE.BoxGeometry(railLen, 3.6, 6), mat(silNear));
   track.position.set(CW / 2, railY, railZ);
   stageGroup.add(track);
-  for (let i = 0; i < 8; i++) {
+  const railGlow = new THREE.Mesh(new THREE.BoxGeometry(railLen, 1.1, 1.1), glowMat(isInk ? 0x6b6659 : neonA));
+  railGlow.position.set(CW / 2, railY - 2.8, railZ + 3.4);
+  stageGroup.add(railGlow);
+  for (let i = 0; i < 10; i++) {
     const pyl = new THREE.Mesh(new THREE.BoxGeometry(3.4, railY, 5), mat(silMid));
-    pyl.position.set(-240 + i * 130 + (rnd() - 0.5) * 20, railY / 2, railZ + 4);
+    pyl.position.set(railX0 + 40 + i * ((railLen - 80) / 9) + (rnd() - 0.5) * 18, railY / 2, railZ + 4);
     stageGroup.add(pyl);
   }
+  // --- The maglev shuttle: 4 sleek cars with warm window bands, neon side stripes,
+  //     roof light bars, glowing couplings, and streamlined nose cones on both ends
+  //     (it runs both ways). Hovers on a soft light field - no wheels, just glow. ---
   const train = new THREE.Group();
-  const car = new THREE.Mesh(new THREE.BoxGeometry(150, 24, 14), mat(silNear));
-  train.add(car);
-  const winBand = new THREE.Mesh(new THREE.BoxGeometry(146, 8, 3), glowMat(isInk ? 0x6b6659 : 0xfff3d6));
-  winBand.position.set(0, 4, 7);
-  train.add(winBand);
-  const headLamp = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 3), glowMat(neonA));
-  headLamp.position.set(74, 0, 7);
-  train.add(headLamp);
-  train.position.set(CW * 0.60, railY - 16, railZ);
+  const trBody = mat(isInk ? 0x24211c : mixHex(silNear, 0xffffff, 0.05));
+  const trWin = glowMat(isInk ? 0x8a8578 : 0xfff3d6);
+  const trAccent = glowMat(neonA);
+  const carLen = 54, carH = 24, carW = 13, gap = 4, spacing = carLen + gap;
+  const mkCar = lx => {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(carLen, carH, carW), trBody));
+    for (const s of [-1, 1]) {
+      const wb = new THREE.Mesh(new THREE.BoxGeometry(carLen - 6, 7, 1.6), trWin);
+      wb.position.set(0, 3.5, s * (carW / 2 + 0.9));
+      g.add(wb);
+    }
+    const ac = new THREE.Mesh(new THREE.BoxGeometry(carLen - 4, 1.3, 1.3), trAccent);
+    ac.position.set(0, carH / 2 - 1.5, carW / 2 + 1);
+    g.add(ac);
+    const roofBar = new THREE.Mesh(new THREE.BoxGeometry(carLen - 8, 1.2, 1.2), glowMat(neonB));
+    roofBar.position.set(0, carH / 2 + 1.4, 0);
+    g.add(roofBar);
+    g.position.x = lx;
+    return g;
+  };
+  train.add(mkCar(-spacing * 1.5));
+  train.add(mkCar(-spacing * 0.5));
+  train.add(mkCar(spacing * 0.5));
+  train.add(mkCar(spacing * 1.5));
+  for (const gx of [-spacing, 0, spacing]) {
+    const cpl = new THREE.Mesh(new THREE.BoxGeometry(gap - 0.5, 3, 2.4), glowMat(isInk ? 0x6b6659 : 0xfff3d6));
+    cpl.position.set(gx, 3.5, 0);
+    train.add(cpl);
+  }
+  for (const s of [-1, 1]) {
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(carW / 2, 9, 4), trBody);
+    nose.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2;
+    nose.position.set(s * (spacing * 1.5 + carLen / 2 + 4.5), 0, 0);
+    train.add(nose);
+  }
+  const headLamps = [];
+  for (const s of [-1, 1]) {
+    for (const ez of [-1, 1]) {
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(1.6, 5, 2), glowMat(0xffffff));
+      hl.position.set(s * (spacing * 1.5 + carLen / 2 + 5.5), 0.5, ez * (carW / 2 + 0.4));
+      train.add(hl);
+      headLamps.push(hl);
+    }
+    const beacon = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.6, 2.6), glowMat(0xff3030));
+    beacon.position.set(s * (spacing * 1.5 + carLen / 2 + 5.5), 8, 0);
+    train.add(beacon);
+  }
+  const underGlow = makeStageGlowMesh(isInk ? 0x6b6659 : neonA, carLen * 5.5);
+  underGlow.rotation.x = -Math.PI / 2;
+  underGlow.position.set(0, -carH / 2 - 5, 0);
+  train.add(underGlow);
+  const baseY = railY - carH / 2 - 3;
+  const trStopA = railX0 - 10, trStopB = railX1 + 10;
+  train.position.set(trStopA + 60, baseY, railZ + 8);
   stageGroup.add(train);
+  // --- Two elevated stations: glowing platforms + slim canopies at each end. ---
+  const mkStation = sx => {
+    const st = new THREE.Group();
+    const plat = new THREE.Mesh(new THREE.BoxGeometry(70, 4, 22), mat(mixHex(silNear, 0x000000, 0.3)));
+    plat.position.set(sx, railY - 14, railZ + 18);
+    st.add(plat);
+    const platEdge = new THREE.Mesh(new THREE.BoxGeometry(70, 1.2, 1.2), glowMat(isInk ? 0x6b6659 : neonB));
+    platEdge.position.set(sx, railY - 11.5, railZ + 29);
+    st.add(platEdge);
+    for (const dx of [-24, 24]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(1.6, 26, 1.6), mat(silNear));
+      post.position.set(sx + dx, railY + 6, railZ + 18);
+      st.add(post);
+    }
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(84, 2.4, 26), mat(mixHex(silNear, 0xffffff, 0.1)));
+    canopy.position.set(sx, railY + 19, railZ + 18);
+    st.add(canopy);
+    const canopyEdge = new THREE.Mesh(new THREE.BoxGeometry(84, 1, 1), glowMat(isInk ? 0x6b6659 : neonA));
+    canopyEdge.position.set(sx, railY + 17.8, railZ + 31);
+    st.add(canopyEdge);
+    const stSign = new THREE.Mesh(new THREE.BoxGeometry(26, 6, 1.6), glowMat(isInk ? 0x6b6659 : 0xfff3d6));
+    stSign.position.set(sx, railY + 24, railZ + 20);
+    st.add(stSign);
+    stageGroup.add(st);
+  };
+  mkStation(trStopA);
+  mkStation(trStopB);
+  stageData.train = {
+    group: train, headLamps: headLamps, underGlow: underGlow,
+    stops: [trStopA, trStopB], speed: 85, dir: 1, phase: 'run',
+    t: 0, holdT: 3.5 + Math.random() * 2, baseY: baseY,
+  };
 
   /* --- Utility cables sagging across the upper sky (static lines) --- */
   for (let ci = 0; ci < 5; ci++) {

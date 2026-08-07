@@ -602,6 +602,28 @@ function updateStage() {
       p.armL.rotation.x = sw; p.armR.rotation.x = -sw;
       p.visor.material.opacity = 0.75 + 0.25 * Math.sin(tNow * 2 + p.ph);
     }
+    // The maglev shuttle glides along the elevated line and pauses at each end
+    // station. It eases up a touch when rallies get fast - a night-city backdrop,
+    // so it stays smooth and lazy, never frantic.
+    const tr = stageData.train;
+    if (tr) {
+      tr.t += dt;
+      if (tr.phase === 'run') {
+        tr.group.position.x += tr.dir * tr.speed * (1 + pace * 0.4) * dt;
+        if ((tr.dir > 0 && tr.group.position.x >= tr.stops[1]) ||
+            (tr.dir < 0 && tr.group.position.x <= tr.stops[0])) {
+          tr.group.position.x = tr.dir > 0 ? tr.stops[1] : tr.stops[0];
+          tr.phase = 'hold'; tr.t = 0;
+        }
+      } else if (tr.t > tr.holdT) {
+        tr.phase = 'run'; tr.dir *= -1; tr.t = 0;
+      }
+      const gliding = tr.phase === 'run';
+      tr.group.position.y = tr.baseY + Math.sin(tNow * 3.1) * (gliding ? 1.1 : 0.3);
+      const lp = gliding ? 0.8 + 0.2 * Math.sin(tNow * 7) : 0.35 + 0.15 * Math.sin(tNow * 2.2);
+      for (const hl of tr.headLamps) hl.material.opacity = lp;
+      tr.underGlow.material.opacity = gliding ? 0.55 : 0.3;
+    }
   
   } else if (stage === 'crowd') {
     for (const s of stageData.crowd) {
