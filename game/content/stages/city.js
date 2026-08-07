@@ -93,17 +93,18 @@ function buildStageCity(P) {
 
   /* --- Far skyline: three static depth layers of dark towers with lit windows --- */
   const LAYERS = [
-    { count: 30, zOff: -24,  sil: mixHex(silFar, 0x000000, 0.38), win: winCool, winOp: 0.5,  winW: 6.5, winH: 8.5, rows: [1, 2] },
-    { count: 30, zOff: 0,    sil: silFar,  win: winCool, winOp: 0.7,  winW: 4.5, winH: 6.5, rows: [2, 3] },
-    { count: 20, zOff: 65,   sil: silMid,  win: winWarm, winOp: 0.85, winW: 2.6, winH: 4.0, rows: [3, 5] },
-    { count: 13, zOff: 135,  sil: silNear, win: winCool, winOp: 0.8,  winW: 2.0, winH: 3.4, rows: [3, 6] },
+    { count: 34, zOff: -30,  sil: mixHex(silFar, 0x000000, 0.45), win: winCool, winOp: 0.5,  winW: 6.0, winH: 8.0, rows: [1, 2], w: 0.3 },
+    { count: 34, zOff: 0,    sil: silFar,  win: winCool, winOp: 0.7,  winW: 4.2, winH: 6.2, rows: [2, 4], w: 0.4 },
+    { count: 24, zOff: 55,   sil: silMid,  win: winWarm, winOp: 0.85, winW: 2.6, winH: 4.0, rows: [4, 6], w: 0.55 },
+    { count: 16, zOff: 110,  sil: silNear, win: winCool, winOp: 0.8,  winW: 2.0, winH: 3.4, rows: [4, 7], w: 0.7 },
+    { count: 10, zOff: 140,  sil: mixHex(silNear, 0x000000, 0.25), win: winWarm, winOp: 0.9, winW: 1.7, winH: 2.8, rows: [5, 9], w: 0.9 },
   ];
   for (let li = 0; li < LAYERS.length; li++) {
     const L = LAYERS[li];
     for (let i = 0; i < L.count; i++) {
       const w = 24 + rnd() * 66;
-      const h = 46 + rnd() * (li === 1 ? 250 : 190);
-      const bx = (i / (L.count - 1)) * (CW + 420) - 210 + (rnd() - 0.5) * 40;
+      const h = 58 + rnd() * (li === 1 ? 300 : 235);
+      const bx = (i / (L.count - 1)) * (CW + 560) - 280 + (rnd() - 0.5) * 40;
       const z = farZ + L.zOff;
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 5), mat(L.sil));
       b.position.set(bx, h / 2 - 8, z);
@@ -118,7 +119,7 @@ function buildStageCity(P) {
           wdw.material.opacity = L.winOp;
           wdw.position.set(bx + (c2 - (cols - 1) / 2) * (w / Math.max(cols, 1)) * 0.6, (r2 + 0.5) * (h / rows) * 0.8, z + 2);
           stageGroup.add(wdw);
-          stageData.winPool.push({ kind: 'mesh', mesh: wdw, baseOp: L.winOp });
+          stageData.winPool.push({ kind: 'mesh', mesh: wdw, baseOp: L.winOp, w: L.w || 0.5 });
         }
       }
       // Rooftop neon line on taller towers (static).
@@ -126,6 +127,12 @@ function buildStageCity(P) {
         const edge = new THREE.Mesh(new THREE.BoxGeometry(w + 3, 1.8, 3), glowMat(li === 1 ? neonB : neonA));
         edge.position.set(bx, h - 1, z);
         stageGroup.add(edge);
+      }
+      // Tiny antenna masts on some far towers (static).
+      if (li >= 2 && rnd() < 0.45) {
+        const mast = new THREE.Mesh(new THREE.BoxGeometry(1.2, 14 + rnd() * 18, 1.2), mat(mixHex(L.sil, 0x000000, 0.4)));
+        mast.position.set(bx, h + 6 + 7, z);
+        stageGroup.add(mast);
       }
     }
   }
@@ -260,27 +267,32 @@ function buildStageCity(P) {
       c.fillStyle = 'rgba(' + (rnd() < 0.5 ? '255,255,255,0.05' : '0,0,0,0.08') + ')';
       c.fillRect(rnd() * TW, rnd() * TH, 1.6, 1.6);
     }
-    const cols = 5 + Math.floor(rnd() * 3);
-    const rows = Math.max(4, Math.floor(TH / 26) - 1);
-    const cw = 11, chh = 13;
-    const litRatio = isInk ? 0.30 : 0.45 + rnd() * 0.30;
+    const cols = 6 + Math.floor(rnd() * 4);
+    const rows = Math.max(6, Math.floor(TH / 20) - 1);
+    const rowStep = TH / rows;
+    const cw = 11;
+    const litRatio = isInk ? 0.32 : 0.5 + rnd() * 0.28;
     for (let r2 = 0; r2 < rows; r2++) {
       for (let c2 = 0; c2 < cols; c2++) {
         const wx = 6 + c2 * ((TW - 12) / cols) + (rnd() - 0.5) * 2;
-        const wy = 8 + r2 * 26 + (rnd() - 0.5) * 2;
+        const wy = 6 + r2 * rowStep + (rnd() - 0.5) * 2;
+        const chh = 10 + rnd() * 5;
         if (rnd() > litRatio) {
-          c.fillStyle = 'rgba(0,0,0,0.32)';
+          c.fillStyle = 'rgba(0,0,0,0.34)';
           c.fillRect(wx, wy, cw, chh);
         } else {
           const lit = rnd();
-          const col = lit < 0.6 ? winWarm : lit < 0.85 ? winCool : neonMix;
-          c.shadowColor = hexStr(col); c.shadowBlur = 3.5;
-          c.fillStyle = hexStr(mixHex(col, 0xffffff, 0.22));
+          const col = lit < 0.58 ? winWarm : lit < 0.84 ? winCool : (rnd() < 0.5 ? neonA : neonB);
+          c.shadowColor = hexStr(col); c.shadowBlur = 4;
+          c.fillStyle = hexStr(mixHex(col, 0xffffff, 0.25));
           c.fillRect(wx, wy, cw, chh);
           c.shadowBlur = 0;
-          cells.push({ x: wx, y: wy, w: cw, h: chh, base: hexStr(mixHex(col, 0xffffff, 0.22)) });
+          cells.push({ x: wx, y: wy, w: cw, h: chh, base: hexStr(mixHex(col, 0xffffff, 0.25)) });
         }
       }
+      // thin floor slab line between storeys
+      c.fillStyle = 'rgba(0,0,0,0.14)';
+      c.fillRect(0, 6 + (r2 + 1) * rowStep - 1, TW, 1.4);
     }
     for (let v = 0; v < 2; v++) {
       c.fillStyle = 'rgba(0,0,0,0.28)';
@@ -296,14 +308,29 @@ function buildStageCity(P) {
     return { tex, c, cells };
   };
 
+  // Register facade cells for the slow window-dimming cycle: each entry carries a
+  // weight (bigger/brighter windows get picked more) and a small cluster of sibling
+  // cells, so a whole patch of lights visibly shuts off together.
+  const regCells = texObj => {
+    const n = texObj.cells.length;
+    for (let ci = 0; ci < n; ci++) {
+      const entry = { kind: 'cell', tex: texObj.tex, c: texObj.c, cell: texObj.cells[ci], w: 1.3 };
+      entry.sibs = [];
+      for (let k = 1; k <= 3; k++) {
+        const j = (ci + k) % n;
+        entry.sibs.push({ kind: 'cell', tex: texObj.tex, c: texObj.c, cell: texObj.cells[j] });
+      }
+      stageData.winPool.push(entry);
+    }
+  };
   for (const side of [-1, 1]) {
     const prot = -side;                    // direction toward the court center (X)
-    for (let row = 0; row < 2; row++) {
-      const xOff = side < 0 ? -110 - row * 62 : CW + 110 + row * 62;
-      for (let i = 0; i < 14; i++) {
+    for (let row = 0; row < 3; row++) {
+      const xOff = side < 0 ? -110 - row * 68 : CW + 110 + row * 68;
+      for (let i = 0; i < 16; i++) {
         const w = 34 + rnd() * 40;
-        const h = 110 + rnd() * 190;
-        const depth = 12 + rnd() * 18;
+        const h = 130 + rnd() * 230;
+        const depth = 16 + rnd() * 26;
         const z = -CL / 2 + 60 + (i / 13) * (CL - 120) + (rnd() - 0.5) * 8;
         const sil = row ? silNear : silMid;
         const darkTop = mixHex(sil, 0x000000, 0.28);
@@ -317,9 +344,9 @@ function buildStageCity(P) {
         ]);
         body.position.set(xOff, h / 2 - 14 + (row ? rnd() * 30 : 0), z);
         stageGroup.add(body);
-        for (let ci = 0; ci < ft.cells.length; ci++) stageData.winPool.push({ kind: 'cell', tex: ft.tex, c: ft.c, cell: ft.cells[ci] });
+        regCells(ft);
         // Front balconies: thin ledges jutting toward the camera across the facade.
-        const balcN = 1 + Math.floor(rnd() * 3);
+        const balcN = 2 + Math.floor(rnd() * 3);
         for (let b2 = 0; b2 < balcN; b2++) {
           const bl = new THREE.Mesh(new THREE.BoxGeometry(w * (0.55 + rnd() * 0.35), 2.4, 4), mat(mixHex(sil, 0xffffff, 0.08)));
           bl.position.set(xOff, (h - 20) * (0.28 + (b2 / balcN) * 0.55) + (rnd() - 0.5) * 8, z + depth / 2 + 2);
@@ -332,7 +359,7 @@ function buildStageCity(P) {
           stageGroup.add(sl);
         }
         // Rooftop setback: stepped upper floor with its own lit facade + ledge.
-        if (h > 150 && rnd() < 0.5) {
+        if (h > 140 && rnd() < 0.6) {
           const sh2 = h * (0.16 + rnd() * 0.1);
           const sw = w * (0.55 + rnd() * 0.15);
           const ft2 = facadeTex(sil, sw, sh2);
@@ -343,14 +370,29 @@ function buildStageCity(P) {
           ]);
           top.position.set(xOff, h - 14 + sh2 / 2, z);
           stageGroup.add(top);
-          for (let ci = 0; ci < ft2.cells.length; ci++) stageData.winPool.push({ kind: 'cell', tex: ft2.tex, c: ft2.c, cell: ft2.cells[ci] });
+          regCells(ft2);
           const ledge = new THREE.Mesh(new THREE.BoxGeometry(w + 3, 2.4, depth + 5), mat(mixHex(sil, 0xffffff, 0.1)));
           ledge.position.set(xOff, h - 14, z);
           stageGroup.add(ledge);
         }
-        // Antenna mast with a neon tip on some towers.
+        // Rooftop clutter: water towers + AC clusters on many buildings (static).
+        if (rnd() < 0.5) {
+          const wtH = 10 + rnd() * 8;
+          const wt = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5.5, wtH, 10), mat(mixHex(sil, 0x000000, 0.35)));
+          wt.position.set(xOff + (rnd() - 0.5) * w * 0.4, h - 14 + wtH / 2 + 5, z);
+          stageGroup.add(wt);
+          const legs = new THREE.Mesh(new THREE.BoxGeometry(10, 3, 10), mat(mixHex(sil, 0x000000, 0.5)));
+          legs.position.set(wt.position.x, h - 14 + 4, z);
+          stageGroup.add(legs);
+        }
         if (rnd() < 0.45) {
-          const aH = 26 + rnd() * 40;
+          const ac = new THREE.Mesh(new THREE.BoxGeometry(6 + rnd() * 6, 4, 6 + rnd() * 6), mat(mixHex(sil, 0xffffff, 0.05)));
+          ac.position.set(xOff + (rnd() - 0.5) * w * 0.5, h - 14 + 5, z);
+          stageGroup.add(ac);
+        }
+        // Antenna mast with a neon tip on most towers.
+        if (rnd() < 0.6) {
+          const aH = 30 + rnd() * 52;
           const ax = xOff + (rnd() - 0.5) * w * 0.4;
           const ant = new THREE.Mesh(new THREE.BoxGeometry(1.8, aH, 1.8), mat(mixHex(sil, 0x000000, 0.55)));
           ant.position.set(ax, h - 14 + aH / 2 + 8, z);
@@ -509,6 +551,39 @@ function buildStageCity(P) {
     floorDecal(46, 4, P.ink, 0.13, CW / 2 - 120, -CL / 2 + 100 + i * 42, 0.5, i);
     floorDecal(46, 4, P.ink, 0.13, CW / 2 + 120, -CL / 2 + 100 + i * 42, 0.5, i + 3);
   }
+
+  // Street-level detailing: curb glow lines, fire hydrants, a neon marquee strip.
+  for (const side of [-1, 1]) {
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2, CL - 80), glowMat(neonMix));
+    curb.position.set(side < 0 ? -46 : CW + 46, 1, 0);
+    stageGroup.add(curb);
+  }
+  for (let i = 0; i < 5; i++) {
+    const hx = (i % 2 ? -26 : CW + 26) + (rnd() - 0.5) * 10;
+    const hz = -CL * 0.3 + i * CL * 0.15;
+    const hyd = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.BoxGeometry(3, 9, 3), mat(mixHex(P.bg, 0x000000, 0.62)));
+    post.position.y = 4.5;
+    hyd.add(post);
+    const cap1 = new THREE.Mesh(new THREE.BoxGeometry(5, 2.4, 5), mat(mixHex(P.bg, 0x000000, 0.45)));
+    cap1.position.y = 9.2;
+    hyd.add(cap1);
+    const cap2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 2.4), mat(mixHex(P.bg, 0x000000, 0.55)));
+    cap2.position.y = 10.6;
+    hyd.add(cap2);
+    hyd.position.set(hx, 0, hz);
+    stageGroup.add(hyd);
+  }
+  // Neon marquee strip on a mid-distance tower (static text glow).
+  const marquee = mkNeon(150, 22, 300, 44, ctx => {
+    const col = hex(isInk ? 0x6b6659 : neonA);
+    ctx.clearRect(0, 0, 300, 44);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 20px "Silkscreen", "Pixelify Sans", sans-serif';
+    ctx.shadowColor = col; ctx.shadowBlur = 10; ctx.fillStyle = '#ffffff';
+    ctx.fillText('PONG  CITY  24/7', 150, 22);
+  });
+  marquee.position.set(CW * 0.28, CH * 0.5, farZ + 92);
 
   // (Snow removed - the night sky now carries stars instead.)
 }

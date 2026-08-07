@@ -540,32 +540,46 @@ function updateStage() {
     const W = stageData.winPool;
     if (W && W.length) {
       const act = stageData.winActive || (stageData.winActive = []);
-      if (act.length < 3 && Math.random() < dt * 0.14) {
-        const pick = W[Math.floor(Math.random() * W.length)];
-        if (pick && !act.some(e => e.src === pick)) {
-          act.push({ src: pick, t: 0, lastB: 1,
-            dimT: 1.4 + Math.random() * 1.0,
-            holdT: 8 + Math.random() * 14,
-            riseT: 1.8 + Math.random() * 1.4 });
+      // More lights shut off at once, they pick the BIG visible windows first (weighted),
+      // and whole little clusters go dark together - so the effect clearly reads across
+      // the skyline. Still slow and lazy: fade out ~1.2-2s, hold 6-14s, fade back.
+      if (act.length < 6 && Math.random() < dt * 0.5) {
+        let total = 0;
+        for (const e of W) total += e.w || 0.5;
+        let t = Math.random() * total;
+        let pick = W[W.length - 1];
+        for (const e of W) { t -= e.w || 0.5; if (t <= 0) { pick = e; break; } }
+        if (pick && !act.some(a => a.src === pick)) {
+          const sibs = (pick.sibs || []).filter(s => !act.some(a => a.src === s)).slice(0, 2 + Math.floor(Math.random() * 2));
+          act.push({ src: pick, sibs: sibs, t: 0, lastB: 1,
+            dimT: 1.2 + Math.random() * 0.9,
+            holdT: 6 + Math.random() * 8,
+            riseT: 1.5 + Math.random() * 1.1 });
         }
       }
+      const apply = (src, bb) => {
+        if (src.kind === 'mesh') src.mesh.material.opacity = src.baseOp * bb;
+        else drawCityCell(src, bb);
+      };
       for (let i = act.length - 1; i >= 0; i--) {
         const e = act[i];
         const srcW = e.src;
         e.t += dt;
         let b;
-        if (e.t < e.dimT) b = 1 - (e.t / e.dimT) * 0.85;
-        else if (e.t < e.dimT + e.holdT) b = 0.15;
-        else if (e.t < e.dimT + e.holdT + e.riseT) b = 0.15 + ((e.t - e.dimT - e.holdT) / e.riseT) * 0.85;
+        if (e.t < e.dimT) b = 1 - (e.t / e.dimT) * 0.96;
+        else if (e.t < e.dimT + e.holdT) b = 0.04;
+        else if (e.t < e.dimT + e.holdT + e.riseT) b = 0.04 + ((e.t - e.dimT - e.holdT) / e.riseT) * 0.96;
         else b = 1;
         if (e.t >= e.dimT + e.holdT + e.riseT) {
-          if (srcW.kind === 'mesh') srcW.mesh.material.opacity = srcW.baseOp;
-          else drawCityCell(srcW, 1);
+          apply(srcW, 1);
+          for (const s of e.sibs) apply(s, 1);
           act.splice(i, 1);
           continue;
         }
-        if (srcW.kind === 'mesh') srcW.mesh.material.opacity = srcW.baseOp * b;
-        else if (Math.abs(b - e.lastB) > 0.02) drawCityCell(srcW, b);
+        if (Math.abs(b - e.lastB) > 0.02) {
+          apply(srcW, b);
+          for (const s of e.sibs) apply(s, b);
+        }
         e.lastB = b;
       }
     }
