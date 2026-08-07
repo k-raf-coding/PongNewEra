@@ -1,0 +1,3044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Pong: Rogue Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Luckiest+Guy&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%; overflow: hidden;
+    background: #0d0b1e;
+    font-family: 'VT323', 'Courier New', monospace;
+    user-select: none; -webkit-user-select: none; color: #e8e0ff;
+    cursor: crosshair;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(88,60,160,.22), transparent 65%),
+      radial-gradient(ellipse at 50% 100%, rgba(30,20,70,.35), transparent 60%),
+      #0d0b1e;
+  }
+  #game {
+    position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    -webkit-image-rendering: pixelated;
+  }
+  /* ---------- Display modes: windowed / borderless / fullscreen ---------- */
+  body.disp-window #game {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(88vw, 158vh); height: 80vh; max-height: 84vh;
+    border: 4px solid #38e1ff; border-radius: 4px;
+    box-shadow: 0 0 0 2px rgba(0,0,0,.8), 10px 12px 0 rgba(0,0,0,.6), inset 0 0 0 1px #ff5d8f;
+    background: #000;
+  }
+  body.disp-window::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background: radial-gradient(ellipse at center, rgba(20,10,40,.3), rgba(0,0,0,.7));
+  }
+  body.disp-borderless #game {
+    position: fixed; inset: 0; width: 100vw; height: 100vh;
+    transform: none; border: none; border-radius: 0; box-shadow: none;
+  }
+  body.disp-window #hud {
+    left: 50%; width: min(88vw, 158vh); transform: translateX(-50%);
+  }
+  .disp-row { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+  .dispBtn {
+    font-family: 'Press Start 2P', monospace; font-size: 8px; color: #e8e0ff; cursor: pointer;
+    padding: 6px 8px; background: #171232; border: 2px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,.8);
+  }
+  .dispBtn:hover { background: #241a4d; }
+  .dispBtn.on { outline: 2px solid #38e1ff; box-shadow: 2px 2px 0 #38e1ff; }
+  /* CRT scanlines + vignette overlay */
+  .scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 300;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 2px, transparent 2px 4px);
+    mix-blend-mode: multiply;
+  }
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 299;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(5,3,15,.55) 100%);
+  }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 10px 16px; pointer-events: none; z-index: 5;
+    font-family: 'Press Start 2P', monospace;
+    text-shadow: 2px 2px 0 #000;
+  }
+  #hudLeft, #hudRight { display: flex; flex-direction: column; gap: 6px; }
+  #hudLeft { align-items: flex-start; } #hudRight { align-items: flex-end; }
+  #goldChip {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px; color: #ffd76a;
+    text-shadow: 2px 2px 0 #000;
+    min-height: 12px;
+  }
+  .score { font-size: clamp(24px, 4.5vw, 40px); line-height: 1; }
+  #scoreP { color: #38e1ff; text-shadow: 3px 3px 0 #06222e; }
+  #scoreC { color: #ff5d8f; text-shadow: 3px 3px 0 #30081a; }
+  #hearts { font-size: 16px; letter-spacing: 4px; color: #ff6b9d; min-height: 18px; }
+  #hearts .dead { color: #3a2a4a; }
+  #hudCenter { text-align: center; padding-top: 0; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  #levelChip {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px; letter-spacing: 1px; color: #b9a8ff;
+    border: 2px solid #000; box-shadow: 3px 3px 0 rgba(0,0,0,.8), inset 0 0 0 1px #6a5a9a;
+    padding: 6px 10px; background: #1a1530;
+  }
+  #levelChip.boss { color: #ff9db8; box-shadow: 3px 3px 0 #000, inset 0 0 0 1px #ff5d8f; }
+  #aiStatus { font-family: 'Press Start 2P', monospace; font-size: 8px; letter-spacing: 0; color: #9d8fd6; min-height: 12px; text-shadow: 1px 1px 0 #000; }
+  #aiStatus .fury { color: #ff9db8; text-shadow: 1px 1px 0 #000, 0 0 6px rgba(255,93,143,.55); }
+  #pupIcons { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: 46vw; }
+  .pup-chip {
+    font-family: 'VT323', monospace; font-size: 15px; line-height: 1;
+    padding: 3px 7px; border: 2px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,.75);
+    background: #1a1530; color: #cdc4f5;
+  }
+  #hudBtns { display: flex; gap: 8px; pointer-events: auto; margin-top: 2px; }
+  .hudBtn {
+    width: 40px; height: 40px; cursor: pointer;
+    background: #221a3e; border: 2px solid #000; box-shadow: 3px 3px 0 rgba(0,0,0,.8), inset 0 0 0 1px #6a5a9a;
+    color: #b9a8ff; font-size: 15px; font-family: inherit;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .08s steps(2), background .1s;
+  }
+  .hudBtn:hover { transform: translate(-1px,-1px); background: #2b2150; color: #38e1ff; }
+  .hudBtn:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 rgba(0,0,0,.8); }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; text-align: center; padding: 20px;
+    background: rgba(8,6,20,.9);
+    animation: fadeIn .2s steps(3); overflow-y: auto;
+  }
+  .overlay.hidden { display: none !important; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes popIn { from { transform: scale(.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  h1.title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(26px, 5.5vw, 48px); letter-spacing: 2px;
+    color: #ffd76a;
+    text-shadow: 3px 3px 0 #000, -2px -2px 0 #38e1ff, 6px 6px 0 rgba(0,0,0,.6);
+  }
+  .title-sub { font-family: 'Press Start 2P', monospace; font-size: 10px; letter-spacing: 3px; color: #38e1ff; text-shadow: 2px 2px 0 #000; }
+  .tagline { color: #a99ad8; font-size: 20px; line-height: 1.4; max-width: 640px; text-shadow: 1px 1px 0 #000; }
+  .best-line { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #ffd76a; text-shadow: 2px 2px 0 #000; min-height: 14px; }
+
+  .btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px; letter-spacing: 1px;
+    padding: 14px 26px; cursor: pointer;
+    border: 2px solid #000;
+    background: linear-gradient(180deg, #ffd76a, #e8a33d);
+    color: #241a00;
+    box-shadow: 0 5px 0 #000, inset 0 2px 0 rgba(255,255,255,.5);
+    text-transform: uppercase;
+    transition: transform .06s steps(2), box-shadow .06s;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #000, inset 0 2px 0 rgba(255,255,255,.5); filter: brightness(1.06); }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #000, inset 0 2px 0 rgba(255,255,255,.5); }
+  .btn.ghost { background: linear-gradient(180deg, #2b2150, #1a1530); color: #b9a8ff; box-shadow: 0 5px 0 #000, inset 0 0 0 1px #6a5a9a; }
+  .btn.ghost:hover { color: #ff5d8f; box-shadow: 0 7px 0 #000, inset 0 0 0 1px #ff5d8f; }
+  .btn-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+  .keys { color: #7a6fa8; font-size: 18px; line-height: 1.8; max-width: 640px; }
+  .keys kbd {
+    font-family: 'Press Start 2P', monospace; font-size: 9px; color: #cdc4f5;
+    border: 2px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,.8);
+    padding: 3px 7px; background: #221a3e; margin: 0 2px;
+  }
+
+  /* ---------- Round intro ---------- */
+  #oppCard {
+    width: min(440px, 92vw); padding: 26px 22px;
+    background: linear-gradient(180deg, #241d44, #161130);
+    border: 3px solid #000; box-shadow: 0 0 0 3px rgba(0,0,0,.9), 6px 6px 0 rgba(0,0,0,.7), inset 0 0 0 2px #6a5a9a;
+    animation: popIn .2s steps(3);
+  }
+  #oppCard.boss { box-shadow: 0 0 0 3px rgba(0,0,0,.9), 6px 6px 0 rgba(0,0,0,.7), inset 0 0 0 2px #ff5d8f; }
+  .opp-emoji { font-size: 52px; line-height: 1; filter: drop-shadow(4px 4px 0 #000); }
+  .opp-name { font-family: 'Press Start 2P', monospace; font-size: clamp(16px, 3.5vw, 24px); margin: 12px 0 6px; text-shadow: 2px 2px 0 #000; }
+  .opp-title { font-family: 'Press Start 2P', monospace; font-size: 9px; letter-spacing: 2px; color: #8a7ab8; text-shadow: 1px 1px 0 #000; }
+  .boss-badge {
+    display: inline-block; margin-top: 10px; padding: 6px 12px;
+    background: #3a1030; border: 2px solid #000; box-shadow: 3px 3px 0 #000, inset 0 0 0 1px #ff5d8f;
+    color: #ff9db8; font-family: 'Press Start 2P', monospace; font-size: 9px;
+  }
+  .ability-box { margin-top: 14px; padding: 12px 14px; background: #0f0c20; border: 2px solid #000; box-shadow: inset 0 0 0 1px #3a2f5c; }
+  .ability-name { font-family: 'Press Start 2P', monospace; font-size: 9px; color: #9d8fd6; }
+  .ability-desc { color: #cdc4f5; font-size: 19px; line-height: 1.4; margin-top: 6px; }
+  .persona-box { margin-top: 12px; padding: 8px 12px; background: #0f0c20; border: 2px solid #000; box-shadow: inset 0 0 0 1px #8a7a3a; font-family: 'Press Start 2P', monospace; font-size: 8px; letter-spacing: 1px; color: #ffd76a; }
+  .intro-gold { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #ffd76a; text-shadow: 2px 2px 0 #000; margin-top: 8px; }
+  .stat-row { display: flex; gap: 18px; justify-content: center; margin-top: 14px; }
+  .stat { text-align: center; }
+  .stat .lbl { font-family: 'Press Start 2P', monospace; font-size: 7px; color: #7a6fa8; }
+  .stat .val { font-family: 'Press Start 2P', monospace; font-size: 11px; margin-top: 4px; text-shadow: 2px 2px 0 #000; }
+  .stat .bar { width: 60px; height: 8px; background: #0f0c20; border: 2px solid #000; margin-top: 5px; }
+  .stat .bar span { display: block; height: 100%; background: linear-gradient(180deg, #ffd76a, #e8a33d); }
+  #roundLabel { font-family: 'Press Start 2P', monospace; font-size: 10px; letter-spacing: 2px; color: #9d8fd6; text-shadow: 2px 2px 0 #000; }
+
+  /* ---------- Draft ---------- */
+  .draft-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .draft-card {
+    width: 190px; padding: 16px 14px; cursor: pointer;
+    background: linear-gradient(180deg, #241d44, #141028);
+    border: 3px solid #000; box-shadow: 5px 5px 0 rgba(0,0,0,.7), inset 0 0 0 2px #3a2f5c;
+    animation: popIn .15s steps(3);
+    transition: transform .06s steps(2), box-shadow .06s;
+  }
+  .draft-card:hover { transform: translate(-2px,-4px); box-shadow: 8px 9px 0 rgba(0,0,0,.7), inset 0 0 0 2px #fff; }
+  .draft-card .pup-icon { font-size: 36px; line-height: 1; filter: drop-shadow(3px 3px 0 #000); }
+  .draft-card .pup-name { font-family: 'Press Start 2P', monospace; font-size: 10px; margin: 10px 0 4px; text-shadow: 2px 2px 0 #000; }
+  .draft-card .pup-rarity { font-family: 'Press Start 2P', monospace; font-size: 7px; letter-spacing: 1px; text-transform: uppercase; }
+  .draft-card .pup-desc { color: #cdc4f5; font-size: 17px; line-height: 1.35; margin-top: 8px; }
+  .draft-card.rarity-common { box-shadow: 5px 5px 0 rgba(0,0,0,.7), inset 0 0 0 2px #6a7a9a; }
+  .draft-card.rarity-common .pup-rarity { color: #8fa8c8; }
+  .draft-card.rarity-rare { box-shadow: 5px 5px 0 rgba(0,0,0,.7), inset 0 0 0 2px #4d7cff; }
+  .draft-card.rarity-rare .pup-rarity { color: #6f9bff; }
+  .draft-card.rarity-epic { box-shadow: 5px 5px 0 rgba(0,0,0,.7), inset 0 0 0 2px #ffb84d; }
+  .draft-card.rarity-epic .pup-rarity { color: #ffb84d; }
+  #ownedPups { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 640px; }
+  .owned-chip { font-size: 17px; padding: 4px 9px; border: 2px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,.75); background: #141028; color: #cdc4f5; }
+  .owned-chip .cnt { color: #ffd76a; font-weight: 700; }
+
+  /* ---------- Shop ---------- */
+  #shopGold { font-family: 'Press Start 2P', monospace; font-size: 12px; color: #ffd76a; text-shadow: 2px 2px 0 #000; }
+  .shop-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .shop-card {
+    width: 200px; padding: 16px 14px; cursor: pointer; text-align: center;
+    background: linear-gradient(180deg, #2a2145, #161130);
+    border: 3px solid #000; box-shadow: 5px 5px 0 rgba(0,0,0,.7), inset 0 0 0 2px #8a7a3a;
+    animation: popIn .15s steps(3);
+    transition: transform .06s steps(2), box-shadow .06s;
+  }
+  .shop-card:hover { transform: translate(-2px,-4px); box-shadow: 8px 9px 0 rgba(0,0,0,.7), inset 0 0 0 2px #ffd76a; }
+  .shop-card.poor { opacity: .55; filter: saturate(.7); }
+  .shop-card.poor:hover { transform: none; box-shadow: 5px 5px 0 rgba(0,0,0,.7), inset 0 0 0 2px #8a7a3a; }
+  .shop-card .pup-icon { font-size: 34px; line-height: 1; filter: drop-shadow(3px 3px 0 #000); }
+  .shop-card .pup-name { font-family: 'Press Start 2P', monospace; font-size: 9px; margin: 10px 0 4px; text-shadow: 2px 2px 0 #000; }
+  .shop-card .pup-desc { color: #cdc4f5; font-size: 16px; line-height: 1.35; margin-top: 8px; min-height: 44px; }
+  .shop-price { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #ffd76a; margin-top: 10px; text-shadow: 2px 2px 0 #000; }
+  #shopOwned { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 680px; }
+  #btnReroll:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: 0 5px 0 #000, inset 0 0 0 1px #6a5a9a; }
+
+  /* ---------- Stakes / Meta / Events / Synergies ---------- */
+  .stake-list, .meta-list { display: flex; flex-direction: column; gap: 10px; max-width: 620px; width: 100%; }
+  .stake-card {
+    display: flex; align-items: center; gap: 14px; text-align: left; cursor: pointer; padding: 12px 14px;
+    background: linear-gradient(180deg, #1e1838, #141028);
+    border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0,0,0,.7), inset 0 0 0 1px #3a2f5c;
+    transition: transform .06s steps(2), box-shadow .06s, background .1s;
+  }
+  .stake-card:hover { transform: translate(-1px,-2px); box-shadow: 6px 6px 0 rgba(0,0,0,.7), inset 0 0 0 1px #fff; }
+  .stake-card.on { background: linear-gradient(180deg, #2a2145, #1a1530); box-shadow: 4px 4px 0 #000, inset 0 0 0 2px #ffd76a; }
+  .stake-card .st-ic { font-size: 26px; filter: drop-shadow(2px 2px 0 #000); }
+  .stake-card .st-name { font-family: 'Press Start 2P', monospace; font-size: 9px; color: #e8e0ff; text-shadow: 2px 2px 0 #000; }
+  .stake-card .st-desc { color: #9d8fd6; font-size: 16px; line-height: 1.3; }
+  .stake-card .st-gold { margin-left: auto; font-family: 'Press Start 2P', monospace; font-size: 9px; color: #ffd76a; white-space: nowrap; }
+  .meta-list { max-width: 560px; }
+  .meta-card {
+    display: flex; align-items: center; gap: 14px; text-align: left; padding: 12px 14px;
+    background: linear-gradient(180deg, #1e1838, #141028);
+    border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0,0,0,.7), inset 0 0 0 1px #3a2f5c;
+  }
+  .meta-card .mt-ic { font-size: 24px; }
+  .meta-card .mt-name { font-family: 'Press Start 2P', monospace; font-size: 9px; color: #e8e0ff; }
+  .meta-card .mt-desc { color: #9d8fd6; font-size: 15px; line-height: 1.3; }
+  .meta-card .mt-lvl { color: #ffd76a; font-family: 'Press Start 2P', monospace; font-size: 9px; white-space: nowrap; }
+  .meta-card .mt-btn { margin-left: auto; }
+  .meta-card.maxed { opacity: .55; }
+  .event-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .event-card {
+    width: 210px; padding: 18px 14px; cursor: pointer; text-align: center;
+    background: linear-gradient(180deg, #2a2145, #161130);
+    border: 3px solid #000; box-shadow: 5px 5px 0 rgba(0,0,0,.7), inset 0 0 0 2px #8a7a3a;
+    animation: popIn .15s steps(3);
+    transition: transform .06s steps(2), box-shadow .06s;
+  }
+  .event-card:hover { transform: translate(-2px,-4px); box-shadow: 8px 9px 0 rgba(0,0,0,.7), inset 0 0 0 2px #ffd76a; }
+  .event-card .pup-icon { font-size: 38px; filter: drop-shadow(3px 3px 0 #000); }
+  .event-card .pup-name { font-family: 'Press Start 2P', monospace; font-size: 9px; margin: 10px 0 6px; text-shadow: 2px 2px 0 #000; }
+  .event-card .pup-desc { color: #cdc4f5; font-size: 16px; line-height: 1.35; }
+  #synIcons { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+  .syn-chip {
+    font-family: 'Press Start 2P', monospace; font-size: 7px; letter-spacing: 0; line-height: 1;
+    padding: 4px 6px; border: 2px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,.8), inset 0 0 0 1px #38e1ff;
+    background: #0e2a3a; color: #9be9ff;
+  }
+  .syn-chip.hot { animation: synPulse .8s steps(2) infinite; }
+  @keyframes synPulse { 0%,100% { background:#0e2a3a; } 50% { background:#14506b; } }
+  .draft-syn {
+    display: inline-block; margin-top: 8px; padding: 4px 8px;
+    font-family: 'Press Start 2P', monospace; font-size: 7px; color: #9be9ff;
+    border: 2px solid #000; background: #0e2a3a; box-shadow: 2px 2px 0 rgba(0,0,0,.8), inset 0 0 0 1px #38e1ff;
+  }
+
+  /* ---------- Defeat / Run over ---------- */
+  #defeatTitle { font-family: 'Press Start 2P', monospace; font-size: clamp(22px, 5vw, 36px); color: #ff5d8f; text-shadow: 3px 3px 0 #000, 6px 6px 0 rgba(0,0,0,.5); }
+  #runOverTitle { font-family: 'Press Start 2P', monospace; font-size: clamp(22px, 5vw, 36px); color: #38e1ff; text-shadow: 3px 3px 0 #000, 6px 6px 0 rgba(0,0,0,.5); }
+  .summary { font-size: 22px; color: #cdc4f5; line-height: 1.7; text-shadow: 1px 1px 0 #000; }
+  #pauseOverlay h2 { font-family: 'Press Start 2P', monospace; font-size: clamp(20px, 4.5vw, 32px); letter-spacing: 3px; color: #e8e0ff; text-shadow: 3px 3px 0 #000; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hudLeft">
+    <div id="scoreP" class="score">0</div>
+    <div id="hearts"></div>
+    <div id="goldChip">🪙 0</div>
+  </div>
+  <div id="hudCenter">
+    <div id="levelChip">NEON PONG</div>
+    <div id="aiStatus"></div>
+    <div id="pupIcons"></div>
+    <div id="synIcons"></div>
+    <div id="condChip" style="font-family:'Press Start 2P'; font-size:8px; color:#fbbf24; min-height:11px; text-shadow:1px 1px 0 #000;"></div>
+  </div>
+  <div id="hudRight">
+    <div id="scoreC" class="score">0</div>
+    <div id="hudBtns">
+      <button class="hudBtn" id="btnMute" title="Mute (M)">🔊</button>
+      <button class="hudBtn" id="btnPause" title="Pause (P)">❚❚</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main menu -->
+<div class="overlay" id="menu">
+  <h1 class="title">NEON&nbsp;PONG</h1>
+  <div class="title-sub">ROGUE ARENA</div>
+  <div class="tagline">A pixel gauntlet of AI champions. Beat each one to earn powerups — spend gold on shop upgrades between matches — lose all lives and the run ends.</div>
+  <div class="best-line" id="menuBest">BEST RUN: —</div>
+  <div class="best-line" id="menuCores" style="color:#38e1ff;">⚡ CORES: 0</div>
+  <div class="btn-row">
+    <button class="btn" id="btnNewRun">Start New Run</button>
+    <button class="btn ghost" id="btnStakes">Stakes</button>
+    <button class="btn ghost" id="btnUpgrades">Upgrades</button>
+  </div>
+  <div class="disp-row" id="dispBtns">
+    <button class="dispBtn" data-disp="window" title="Windowed">🪟 Window</button>
+    <button class="dispBtn" data-disp="borderless" title="Borderless">📺 Borderless</button>
+    <button class="dispBtn" data-disp="fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+  </div>
+  <div class="disp-row" id="stageBtnsMenu" style="margin-top:6px;">
+    <button class="dispBtn" data-stage="none" title="No backdrop">🧻 None</button>
+    <button class="dispBtn" data-stage="city" title="Skyline city">🏙️ City</button>
+    <button class="dispBtn" data-stage="crowd" title="Stadium crowd">👥 Crowd</button>
+    <button class="dispBtn" data-stage="dunes" title="Rolling dunes">🏜️ Dunes</button>
+    <button class="dispBtn" data-stage="nebula" title="Starfield">🌌 Nebula</button>
+  </div>
+  <div class="keys">
+    <kbd>W</kbd>/<kbd>S</kbd> or <kbd>↑</kbd>/<kbd>↓</kbd> move · mouse aims · <kbd>SHIFT</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> curve · <kbd>P</kbd> pause · <kbd>M</kbd> mute
+  </div>
+  <div class="tagline">Win a match → pick 2 powerups + shop visit · First to 5 · Lose → lose a life</div>
+</div>
+
+<!-- Round intro -->
+<div class="overlay hidden" id="intro">
+  <div id="roundLabel">ROUND 1</div>
+  <div class="intro-gold" id="introGold">🪙 GOLD: 8</div>
+  <div id="oppCard">
+    <div class="opp-emoji" id="oppEmoji">🧱</div>
+    <div class="opp-name" id="oppName">THE WALL</div>
+    <div class="opp-title" id="oppTitle">UNBREAKABLE</div>
+    <div class="boss-badge hidden" id="bossBadge">☠ Boss</div>
+    <div class="ability-box">
+      <div class="ability-name" id="oppAbility">Passive — Tank</div>
+      <div class="ability-desc" id="oppAbilityDesc"></div>
+    </div>
+    <div class="persona-box" id="oppPersona">PERSONALITY: PURE DEFENSE</div>
+    <div class="persona-box" id="oppCond" style="color:#fbbf24; box-shadow: inset 0 0 0 1px #fbbf24;"></div>
+    <div class="stat-row" id="oppStats"></div>
+  </div>
+  <div class="tagline" style="font-size:13px; margin-top:12px; color:#fbbf24;">🎱 PICK THE ARENA BALL — it affects the whole rally, both sides</div>
+  <div class="stake-list" id="ballPick" style="max-height:132px; overflow-y:auto;"></div>
+  <div class="btn-row">
+    <button class="btn" id="btnServe">Serve!</button>
+  </div>
+</div>
+
+<!-- Powerup draft -->
+<div class="overlay hidden" id="draft">
+  <h1 class="title" id="draftTitle" style="font-size: clamp(20px, 4vw, 32px);">VICTORY!</h1>
+  <div class="tagline" id="draftSub">CHOOSE 2 POWERUPS — PICK 1 OF 3</div>
+  <div class="draft-row" id="draftCards"></div>
+  <div class="tagline">YOUR LOADOUT</div>
+  <div id="ownedPups"></div>
+</div>
+
+<!-- Shop -->
+<div class="overlay hidden" id="shop">
+  <h1 class="title" style="font-size: clamp(20px, 4vw, 32px);">🪙 SHOP</h1>
+  <div class="tagline" id="shopGold">GOLD: 8</div>
+  <div class="shop-row" id="shopItems"></div>
+  <div class="tagline" style="font-size: 15px; color: #8a7ab8;">Permanent run upgrades — separate from victory powerups</div>
+  <div class="tagline" style="font-size: 15px;">YOUR UPGRADES</div>
+  <div id="shopOwned"></div>
+  <div class="btn-row">
+    <button class="btn ghost" id="btnReroll">Reroll (3🪙)</button>
+    <button class="btn" id="btnShopLeave">Leave Shop</button>
+  </div>
+</div>
+
+<!-- Stakes (run modifiers — Hades Heat / Balatro Stakes style) -->
+<div class="overlay hidden" id="stakes">
+  <h1 class="title" style="font-size: clamp(20px, 4vw, 32px);">⚔️ STAKES</h1>
+  <div class="tagline">Raise the stakes before a run. Each one makes the gauntlet harder but pays out bonus gold — stack them for a fatter purse.</div>
+  <div class="stake-list" id="stakeList"></div>
+  <div class="tagline" id="stakeTotal" style="color:#ffd76a;">GOLD MULTIPLIER: ×1.0</div>
+  <div class="btn-row">
+    <button class="btn ghost" id="btnStakesBack">Back</button>
+    <button class="btn" id="btnStakesGo">Begin Run</button>
+  </div>
+</div>
+
+<!-- Meta upgrades (Hades Mirror of Night style — permanent between runs) -->
+<div class="overlay hidden" id="meta">
+  <h1 class="title" style="font-size: clamp(20px, 4vw, 32px);">⚡ UPGRADES</h1>
+  <div class="tagline" id="metaCores">CORES: 0</div>
+  <div class="tagline" style="font-size:15px;">Permanent upgrades that persist across every run. Earn ⚡ Cores by clearing rounds, defeating bosses, and discovering new powerups, champions, and synergies.</div>
+  <div class="meta-list" id="metaList"></div>
+  <div class="tagline" style="font-size:15px;">CODEX — DISCOVERIES</div>
+  <div class="tagline" id="codexLine" style="font-size:15px; color:#9d8fd6;"></div>
+  <div class="btn-row">
+    <button class="btn" id="btnMetaBack">Back</button>
+  </div>
+</div>
+
+<!-- Random events between rounds (Chaos Gates / Balatro booster style) -->
+<div class="overlay hidden" id="event">
+  <h1 class="title" style="font-size: clamp(20px, 4vw, 32px);">🌀 THE WAYSIDE</h1>
+  <div class="tagline" id="eventSub">A mysterious traveler offers you a choice...</div>
+  <div class="event-row" id="eventCards"></div>
+  <div class="btn-row">
+    <button class="btn ghost" id="btnEventSkip">Decline</button>
+  </div>
+</div>
+
+<!-- Defeat -->
+<div class="overlay hidden" id="defeat">
+  <div id="defeatTitle">DEFEAT!</div>
+  <div class="summary" id="defeatSummary"></div>
+  <div class="btn-row">
+    <button class="btn" id="btnRetry">Retry Round</button>
+    <button class="btn ghost" id="btnAbandon">Abandon Run</button>
+  </div>
+</div>
+
+<!-- Run over -->
+<div class="overlay hidden" id="over">
+  <div id="runOverTitle">RUN OVER</div>
+  <div class="summary" id="runSummary"></div>
+  <div class="best-line" id="runBest"></div>
+  <div class="btn-row">
+    <button class="btn" id="btnNewRun2">New Run</button>
+    <button class="btn ghost" id="btnMenu2">Menu</button>
+  </div>
+</div>
+
+<!-- Pause -->
+<div class="overlay hidden" id="pauseOverlay">
+  <h2>PAUSED</h2>
+  <div class="keys"><kbd>P</kbd> or <kbd>ESC</kbd> to resume</div>
+  <div class="btn-row">
+    <button class="btn" id="btnResume">Resume</button>
+    <button class="btn ghost" id="btnQuit">Quit to Menu</button>
+  </div>
+  <div class="disp-row" id="dispBtns2">
+    <button class="dispBtn" data-disp="window" title="Windowed">🪟 Window</button>
+    <button class="dispBtn" data-disp="borderless" title="Borderless">📺 Borderless</button>
+    <button class="dispBtn" data-disp="fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+  </div>
+  <div class="disp-row" id="stageBtns" style="margin-top:8px;">
+    <button class="dispBtn" data-stage="none" title="No backdrop">🧻 None</button>
+    <button class="dispBtn" data-stage="city" title="Skyline city">🏙️ City</button>
+    <button class="dispBtn" data-stage="crowd" title="Stadium crowd">👥 Crowd</button>
+    <button class="dispBtn" data-stage="dunes" title="Rolling dunes">🏜️ Dunes</button>
+    <button class="dispBtn" data-stage="nebula" title="Starfield">🌌 Nebula</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ============================== DOM refs ============================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
+const scorePEl = $('scoreP'), scoreCEl = $('scoreC'), levelChipEl = $('levelChip');
+const heartsEl = $('hearts'), aiStatusEl = $('aiStatus'), pupIconsEl = $('pupIcons');
+const menuEl = $('menu'), introEl = $('intro'), draftEl = $('draft');
+const defeatEl = $('defeat'), overEl = $('over'), pauseEl = $('pauseOverlay'), shopEl = $('shop');
+const stakesEl = $('stakes'), metaEl = $('meta'), eventEl = $('event');
+const btnMute = $('btnMute'), btnPause = $('btnPause');
+
+/* ============================== Constants ============================== */
+const WIN_SCORE = 5;
+const PADDLE_W = 14, PADDLE_H = 118, BALL_R = 7;
+const EDGE = 26;
+const PLAYER_SPEED = 460;
+const BALL_START = 740, BALL_MAX = 1000, BALL_HARD_MAX = 1080;
+const MAX_TILT = 66 * Math.PI / 180;
+const CURVE_CAP = 65 * Math.PI / 180;
+const SPIN_CURVE = 140, MAX_SPIN = 4;   // Magnus effect: spin curves the ball in flight
+const MAX_BALLS = 3;
+const START_LIVES = 3, MAX_LIVES = 6;
+const COLORS = { player: '#38e1ff', cpu: '#ff5d8f', ball: '#8ef0ff' };
+const FONT_PIXEL = '"Press Start 2P", monospace';
+const FONT_BODY = '"VT323", monospace';
+let PIXEL = 0.5; // canvas downscale factor (upscaled with image-rendering: pixelated)
+// Logarithmic per-hit speed ramp: gains start hot and taper near the cap, so rallies
+// speed up noticeably but can never snowball into impossible speeds.
+function speedRamp(base, speed) {
+  const t = clamp((speed - BALL_START) / Math.max(1, BALL_HARD_MAX - BALL_START), 0, 1);
+  return Math.max(6, Math.round(base * Math.pow(1 - t, 1.25)));
+}
+let selBall = 'standard';     // the arena ball for this round (picked on the intro screen)
+let flashVig = 0;             // flashbang vignette (decays toward 0)
+let playerSlowT = 0;          // Chill ball: player paddle slow timer
+let hazardScale = 1;          // stage hazards intensify as the run deepens
+let bonks = [];               // cartoon impact words (Pizza-Tower style hit pops)
+const BONK_WORDS = ['BONK!', 'POW!', 'WHAM!', 'BOOM!', 'ZAP!', 'SMACK!', 'THWACK!', 'KRAK!', 'BAM!', 'PING!', 'ZING!', 'KAPOW!', 'BOINK!', 'BLAM!', 'CLANG!', 'DONG!', 'FWAP!', 'SLAP!', 'SPLAT!', 'THUD!', 'BASH!', 'WHACK!', 'CRACK!', 'SWISH!', 'FWOOSH!', 'BZZT!', 'POW-POW!', 'KERBLAM!', 'BLAMMO!', 'CRUNCH!', 'SNIKT!', 'VROOM!', 'KABOOM!', 'WHAMMO!', 'SPROING!', 'TWANG!'];   // impact words, all ≤ 12 chars
+const BONK_COLORS = ['#ff5d5d', '#ffd76a', '#8ef0ff', '#ff9ef5', '#7dffa8', '#ff9f43', '#7dd3fc', '#ffb84d', '#ffe066'];
+const BALL_TYPES = [
+  { id: 'standard', icon: '⚪', name: 'Standard',  desc: 'The classic rally ball — nothing fancy.' },
+  { id: 'rocket',   icon: '🚀', name: 'Rocket',    desc: '+25% serve speed, +30 px/s on every paddle hit.' },
+  { id: 'flash',    icon: '💥', name: 'Flashbang', desc: 'Flashes every ~3.5s — stuns whoever is receiving for a blink.' },
+  { id: 'holo',     icon: '👻', name: 'Holo',      desc: 'Spawns faint fake clones that fool the CPU.' },
+  { id: 'wave',     icon: '🌊', name: 'Wave',      desc: 'Sways side to side as it flies.' },
+  { id: 'split',    icon: '🍀', name: 'Split',     desc: 'Every paddle hit cracks off a short-lived mini-ball.' },
+  { id: 'heavy',    icon: '🪨', name: 'Heavy',     desc: 'Dips with gravity — low, weird bounces.' },
+  { id: 'chill',    icon: '❄️', name: 'Chill',     desc: 'Hits slow the receiver\'s paddle for a moment.' },
+  { id: 'charge',   icon: '🔋', name: 'Charge',    desc: '+45 px/s per paddle hit — ramps all rally.' },
+  { id: 'jitter',   icon: '🎲', name: 'Jitter',    desc: 'Randomly twitches direction mid-flight.' },
+  { id: 'trick',    icon: '🃏', name: 'Feint',     desc: 'One sharp fake curve per flight.' },
+  { id: 'echo',     icon: '🫧', name: 'Echo',      desc: 'Leaves ghost trails and ring bursts on every bounce.' },
+];
+
+/* ============================== Powerups ============================== */
+const POWERUPS = {
+  /* --- Common --- */
+  paddle_plus:  { icon: '🏓', name: 'Overdrive Paddles', rarity: 'common', desc: 'Paddle length grows (25% first stack, less per extra).' },
+  speed_boost:  { icon: '🚀', name: 'Rocket Servers',   rarity: 'common', desc: 'Serves launch faster (70 px/s first stack, less per extra).' },
+  turbo:        { icon: '⚡', name: 'Turbo Core',       rarity: 'common', desc: 'Each rally hit adds speed (8 px/s first stack, less per extra).' },
+  reflex:       { icon: '🌀', name: 'Reflex Coils',     rarity: 'common', desc: 'Paddle speed grows (25% first stack, less per extra).' },
+  shield:       { icon: '🛡️', name: 'Aegis Shield',     rarity: 'common', desc: 'Bounces one goal back into play per round.' },
+  sniper:       { icon: '🎯', name: 'Sniper Scope',     rarity: 'common', desc: 'Serves launch nearly dead straight.' },
+  lucky:        { icon: '🍀', name: 'Charmed Round',    rarity: 'common', desc: "At round start, 70% chance the CPU's special ability is disabled for the round." },
+  magnet:       { icon: '🧲', name: 'Magnet Grip',      rarity: 'common', desc: 'Pulls incoming balls toward your paddle.' },
+  tempo:        { icon: '⏱️', name: 'Tempo',            rarity: 'common', desc: 'Serve countdown is 40% faster per stack.' },
+  battery:      { icon: '🔋', name: 'Battery Core',     rarity: 'common', desc: 'Every 8s (faster per stack) your paddle charges: your next hit is +40 speed per stack (glows when ready).' },
+  wide:         { icon: '🌊', name: 'Wide Arc',         rarity: 'common', desc: '+25% maximum hit angle on your shots.' },
+  /* --- Rare --- */
+  multiball:    { icon: '🎱', name: 'Multiball Core',   rarity: 'rare',   desc: 'Your paddle hits split the ball (max 3 balls, tight spread).' },
+  power_shot:   { icon: '💥', name: 'Power Shot',       rarity: 'rare',   desc: 'Doubles the speed gain on your hits.' },
+  curve:        { icon: '🪄', name: 'Curve Control',    rarity: 'rare',   desc: 'Hold SHIFT + ↑/↓ to bend your shots in flight.' },
+  second_paddle:{ icon: '🛟', name: 'Backup Paddle',    rarity: 'rare',   desc: 'An auto-defender paddle guards your side.' },
+  vamp:         { icon: '🧛', name: 'Vampire Paddle',   rarity: 'rare',   desc: 'Every hit grows your paddle & shrinks theirs (more per stack).' },
+  freezer:      { icon: '❄️', name: 'Cryo Field',       rarity: 'rare',   desc: 'CPU is frozen (slowed 40%) for 6s each round.' },
+  bolt:         { icon: '☄️', name: 'Chain Bolt',       rarity: 'rare',   desc: '20% chance per stack per hit to fire a super-fast bolt.' },
+  twin_serve:   { icon: '👯', name: 'Twin Serve',       rarity: 'rare',   desc: 'Each serve launches +1 ball per stack (max 3, tight spread).' },
+  frost:        { icon: '🧊', name: 'Frostbite',        rarity: 'rare',   desc: 'Your hits chill the CPU (20% slower for 2s).' },
+  seeker:       { icon: '🧿', name: 'Seeker Rounds',    rarity: 'rare',   desc: 'Your shots bend gently toward the CPU paddle.' },
+  bash:         { icon: '💢', name: 'Shockwave',        rarity: 'rare',   desc: 'Your hard hits (>600 px/s) stun the CPU for 0.5s.' },
+  magnus:       { icon: '🪄', name: 'Curve Jolt',       rarity: 'rare',   desc: 'Every hit leaves the ball with a burst of spin.' },
+  void:         { icon: '🕳️', name: 'Void Gate',        rarity: 'rare',   desc: '20% chance per stack a ball passing you is erased (no point).' },
+  emp:          { icon: '📡', name: 'EMP Surge',       rarity: 'rare',   desc: 'Every 7s, the CPU is slowed to 35% speed for 0.5s (never fully locked).' },
+  /* --- Epic --- */
+  extra_life:   { icon: '❤️', name: 'Phoenix Heart',    rarity: 'epic',   desc: '+1 life immediately.' },
+  ghost_ball:   { icon: '👻', name: 'Ghost Ball',       rarity: 'epic',   desc: "Your ball phases through the CPU paddle 2× per round (1.5s recharge between)." },
+  iron_wall:    { icon: '🏰', name: 'Iron Will',        rarity: 'epic',   desc: 'CPU needs 6 points to beat you instead of 5.' },
+  time_warp:    { icon: '⏳', name: 'Chrono Field',     rarity: 'epic',   desc: 'Every 10s (faster per stack), time slows to 60% for 2s.' },
+  colossus:     { icon: '🏯', name: 'Colossus Frame',   rarity: 'epic',   desc: "+50% paddle length. Your hits tremor the CPU (15% slower for 1.5s)." },
+  doom:         { icon: '🪞', name: 'Trick Mirror',     rarity: 'epic',   desc: "Every 5s, the ball closest to the CPU's goal reverses and flies back to you." },
+  champion:     { icon: '👑', name: "Champion's Aura",  rarity: 'epic',   desc: 'CPU abilities trigger 40% slower.' },
+  glitch:       { icon: '🖥️', name: 'Signal Ghost',    rarity: 'epic',   desc: "Every 6s, the CPU's aim scrambles for 2.5s (3× error)." },
+  phoenix:      { icon: '🔥', name: 'True Phoenix',     rarity: 'epic',   desc: 'Once per run, survive a fatal loss with 1 life.' },
+};
+const POWERUP_IDS = Object.keys(POWERUPS);
+
+/* ============================== Shop (Balatro-style, separate from powerups) ============================== */
+const START_GOLD = 8;
+const SHOP_ITEMS = {
+  shop_len:   { icon: '🌀', name: 'Coil Springs',     desc: 'Hold still to stretch your paddle up to +25% length (resets on movement). Stacks.', price: 7, weight: 3 },
+  shop_spd:   { icon: '💨', name: 'Nitrous',          desc: '+20% paddle speed while the ball is fast (>700 px/s). Stacks.', price: 6, weight: 3 },
+  shop_pwr:   { icon: '🔥', name: 'Searing Edge',     desc: 'Your hits burn the CPU paddle −3% smaller for 3s (stacks).', price: 8, weight: 3 },
+  shop_serve: { icon: '🔧', name: 'Sabotage',         desc: "The CPU's serves are 20% slower. Stacks.", price: 6, weight: 3 },
+  shop_heart: { icon: '❤️', name: 'Heart Container',  desc: '+1 max life and heal 1. Stacks.', price: 12, weight: 2 },
+  shop_regen: { icon: '💚', name: 'First Aid',        desc: 'Restore 1 life now.', price: 6, weight: 2 },
+  shop_spin:  { icon: '🌀', name: 'Spin Mastery',     desc: '+30% spin from paddle motion. Stacks.', price: 7, weight: 3 },
+  shop_curve: { icon: '🌪️', name: 'Magnus Cell',      desc: '+25% curve strength in flight. Stacks.', price: 7, weight: 3 },
+  shop_interest: { icon: '📈', name: 'Interest Ledger', desc: '+1 gold interest cap each shop visit. Stacks.', price: 8, weight: 2 },
+  shop_reroll:   { icon: '🔁', name: 'Reroll Token',  desc: '+1 free shop reroll each visit. Stacks.', price: 6, weight: 2 },
+  shop_evade:    { icon: '💨', name: 'Evasion Coils', desc: '8% chance per stack a goal against you is nullified.', price: 7, weight: 2 },
+};
+const SHOP_IDS = Object.keys(SHOP_ITEMS);
+
+/* ============================== Meta-progression (Hades Mirror style) ============================== */
+const META_UPGRADES = {
+  meta_hp:     { icon: '❤️', name: 'Vitality Core',  desc: '+1 max life on every run.', max: 2, cost: 8, inc: 1 },
+  meta_gold:   { icon: '🪙', name: 'War Chest',      desc: '+3 starting gold every run.', max: 3, cost: 6, inc: 3 },
+  meta_luck:   { icon: '✨', name: 'Rarity Sigil',   desc: '+10% rare & epic draft odds.', max: 3, cost: 7, inc: 10 },
+  meta_disc:   { icon: '🏷️', name: 'Merchant Pact',  desc: '-10% shop prices (rounds down).', max: 3, cost: 7, inc: 10 },
+  meta_int:    { icon: '📈', name: 'Interest Ledger',desc: 'Interest pays out per 3 held instead of 4 (better rate).', max: 3, cost: 8, inc: 1 },
+  meta_start:  { icon: '🎁', name: 'Head Start',     desc: 'Begin every run with 1 random free powerup.', max: 1, cost: 12, inc: 1 },
+};
+const META_IDS = Object.keys(META_UPGRADES);
+
+/* ============================== Synergies (Gungeon / Balatro combos) ============================== */
+const SYNERGIES = [
+  { id: 'syn_magseek', a: 'magnet',    b: 'seeker',       icon: '🧲', name: 'Gravity Well',   desc: 'Magnet + Seeker: incoming AND outgoing balls bend 40% harder.' },
+  { id: 'syn_frost',   a: 'freezer',   b: 'frost',        icon: '🧊', name: 'Deep Freeze',   desc: 'Freezer + Frostbite: CPU is frozen 2s longer and chilled aim is worse.' },
+  { id: 'syn_vamp',    a: 'vamp',      b: 'second_paddle', icon: '🛟', name: 'Blood Mirror',  desc: 'Vampire + Backup Paddle: the defender also steals paddle size.' },
+  { id: 'syn_power',   a: 'power_shot', b: 'turbo',       icon: '💥', name: 'Overcharge',    desc: 'Power Shot + Turbo: every hit gains +14 speed and +6 turbo speed.' },
+  { id: 'syn_bolt',    a: 'bolt',      b: 'twin_serve',   icon: '☄️', name: 'Bolt Barrage',  desc: 'Chain Bolt + Twin Serve: serve balls have a 35% bolt chance on return.' },
+  { id: 'syn_ghost',   a: 'ghost_ball', b: 'void',        icon: '👻', name: 'Echo Void',     desc: 'Ghost Ball + Void Gate: voided goals refund a ghost charge.' },
+  { id: 'syn_clock',   a: 'time_warp', b: 'tempo',        icon: '⏳', name: 'Chrono Tempo',  desc: 'Chrono Field + Tempo: slow-mo triggers 30% more often and lasts longer.' },
+  { id: 'syn_titan',   a: 'colossus',  b: 'paddle_plus',  icon: '🏯', name: 'Titan Grip',    desc: 'Colossus + Overdrive Paddles: +40% extra paddle length.' },
+  { id: 'syn_shield',  a: 'shield',    b: 'lucky',        icon: '🍀', name: 'Fortuna Aegis', desc: 'Aegis + Charmed Round: the CPU ability is ALWAYS disabled at round start.' },
+  { id: 'syn_life',    a: 'phoenix',   b: 'extra_life',   icon: '🔥', name: 'Immortal Rite', desc: 'Phoenix + Heart: revive with 3 lives instead of 1.' },
+];
+
+/* ============================== Stakes (Hades Heat / Balatro Stakes) ============================== */
+const STAKES = [
+  { id: 'stk_frenzy',  icon: '⚡', name: 'Frenzy',      desc: 'CPU moves 20% faster.', gold: 0.5 },
+  { id: 'stk_giant',   icon: '🛡️', name: 'Giant Paddles', desc: 'CPU paddles are 25% larger.', gold: 0.5 },
+  { id: 'stk_fastball', icon: '🚀', name: 'Hot Serves', desc: 'CPU serve speed +100 px/s.', gold: 0.6 },
+  { id: 'stk_extra',   icon: '🔥', name: 'Extra Point', desc: 'CPU needs only 4 points to win.', gold: 0.8 },
+  { id: 'stk_chaos',   icon: '🌪️', name: 'Chaos Arena', desc: 'A random hazard is always active.', gold: 0.7 },
+];
+
+/* ============================== Arena conditions / hazards ============================== */
+const CONDITIONS = [
+  { id: 'obstacles', icon: '🧱', name: 'Blockades',    desc: 'Drifting brick walls bounce the ball mid-court.' },
+  { id: 'wind',      icon: '🌬️', name: 'Gale Winds',  desc: 'A side wind pushes the ball sideways.' },
+  { id: 'blackhole', icon: '🕳️', name: 'Black Hole',  desc: 'A gravity well in the center pulls the ball in.' },
+  { id: 'boosts',    icon: '⚡', name: 'Boost Lanes',  desc: 'Glowing lanes fire the ball up when crossed.' },
+  { id: 'slick',     icon: '🧊', name: 'Slick Ice',    desc: 'Your paddle slides with momentum — hard to stop.' },
+  { id: 'bouncy',    icon: '🫧', name: 'Bouncy Walls', desc: 'Wall hits gain wild random spin.' },
+  { id: 'ghosts',    icon: '👻', name: 'Haunted Hall', desc: 'Ghost balls sometimes spawn from the walls.' },
+];
+const COND_BY_ID = Object.fromEntries(CONDITIONS.map(c => [c.id, c]));
+
+/* ============================== Random events (Chaos Gate / booster pack style) ============================== */
+const EVENTS = [
+  { id: 'ev_gamble',  icon: '🎲', name: 'Coin Flip',    desc: 'Double your gold — or lose half of it.', fn: ev => { const half = Math.floor(ev.gold / 2); if (Math.random() < 0.5) { run.gold += half; return 'GOLD DOUBLED!'; } run.gold = Math.max(0, run.gold - half); return 'GOLD HALVED...'; } },
+  { id: 'ev_heal',    icon: '💚', name: 'Wayside Shrine', desc: 'Pay 4 gold to restore a life.', cost: 4, fn: ev => { if (run.gold < 4) return null; if (run.lives >= maxLives()) return 'Lives are full.'; run.gold -= 4; run.lives = Math.min(maxLives(), run.lives + 1); updateHearts(); return '+1 LIFE'; } },
+  { id: 'ev_pup',     icon: '🎁', name: 'Lost Cargo',   desc: 'Pay 6 gold to receive a random powerup.', cost: 6, fn: ev => { if (run.gold >= 6) { run.gold -= 6; const id = weightedRoll(); run.powerups.push(id); if (id === 'extra_life') run.lives = Math.min(maxLives(), run.lives + 1); updatePupIcons(); updateHearts(); codexPup(id); return POWERUPS[id].name + '!'; } return null; } },
+  { id: 'ev_reroll',  icon: '🔁', name: 'Reroll Pack',  desc: 'Pay 5 gold to gain 2 free shop rerolls.', cost: 5, fn: ev => { if (run.gold >= 5) { run.gold -= 5; run.freeRerolls = (run.freeRerolls || 0) + 2; return '+2 REROLLS'; } return null; } },
+  { id: 'ev_stake',   icon: '⚔️', name: 'Blood Pact',   desc: 'Take +50% gold for the rest of the run — but CPU is 15% faster.', fn: ev => { run.betrayal = (run.betrayal || 1) * 1.5; run.cpuBoost = (run.cpuBoost || 1) * 1.15; return 'PACT FORGED'; } },
+  { id: 'ev_skip',    icon: '🍀', name: 'Grace',        desc: 'Nothing. Sometimes doing nothing is the winning move.', fn: ev => { return '...'; } },
+];
+
+/* ============================== AI roster ============================== */
+const AIS = {
+  wall:     { icon: '🧱', name: 'The Wall',     title: 'UNBREAKABLE',      color: '#4ade80', speed: 360, react: 0.24,  error: 40,  predict: false, paddleMult: 1.70, aim: 0.0,  personality: 'defense',    ability: 'tank',    abilityName: 'Passive — Fortress',  abilityDesc: 'A towering paddle that smothers angles. Slow, but its reach is enormous.' },
+  viper:    { icon: '🐍', name: 'The Viper',    title: 'LIGHTNING STRIKE', color: '#facc15', speed: 620, react: 0.10, error: 14,  predict: true,  paddleMult: 0.75, aim: 0.35, personality: 'aggressive', ability: 'surge',   abilityName: 'Surge — Overdrive',    abilityDesc: 'Every 6 seconds it hits overdrive: movement speed doubles for 1.5s, then it overcommits — punish the miss.' },
+  diviner:  { icon: '🔮', name: 'The Diviner',  title: 'READS YOUR MOVE',  color: '#a78bfa', speed: 560, react: 0.03,  error: 3,   predict: true,  paddleMult: 1.00, aim: 0.9,  personality: 'tricky',     ability: 'diviner', abilityName: 'Counter — Psychic Spin', abilityDesc: 'Predicts full bounces and spins returns against your movement. Fake it out by feinting.' },
+  smasher:  { icon: '💥', name: 'The Smasher',  title: 'DEMOLITION',       color: '#fb923c', speed: 600, react: 0.07,  error: 10,  predict: true,  paddleMult: 1.00, aim: 0.4,  personality: 'aggressive', ability: 'smasher', abilityName: 'Power Hits — Detonation', abilityDesc: 'Every smash adds +36 speed to the ball. Rallies get violent fast.' },
+  glacier:  { icon: '🧊', name: 'The Glacier',  title: 'CRYOGENIC ZONE',   color: '#7dd3fc', speed: 480, react: 0.14,  error: 18,  predict: true,  paddleMult: 1.25, aim: 0.2,  personality: 'defense',    ability: 'glacier', abilityName: 'Aura — Frozen Fingers',   abilityDesc: 'Its cold aura halves your paddle speed. Big reach, glacial pace, cold hands.' },
+  gambler:  { icon: '🎲', name: 'The Gambler',  title: 'ALL OR NOTHING',   color: '#fbbf24', speed: 540, react: 0.07,  error: 14,  predict: true,  paddleMult: 1.00, aim: 0.5,  personality: 'eccentric',  ability: 'gamble',  abilityName: 'Gamble — Coin Flip',     abilityDesc: 'Every 4 seconds it rolls the dice: half the time it teleports onto the ball, half the time it freezes. Unpredictable.' },
+  knight:   { icon: '🛡️', name: 'The Knight',   title: 'IRON VOW',         color: '#93c5fd', speed: 515, react: 0.08,  error: 12,  predict: true,  paddleMult: 1.15, aim: 0.3,  personality: 'defense',    ability: 'parry',   abilityName: 'Parry — Counter',       abilityDesc: 'Every 6 seconds it raises a shield for 1.2s: hits during the parry rocket back at +60 speed.' },
+  siren:    { icon: '🧜', name: 'The Siren',    title: 'HYPNOTIC',         color: '#f9a8d4', speed: 575, react: 0.06,  error: 9,   predict: true,  paddleMult: 0.95, aim: 0.6,  personality: 'tricky',     ability: 'lure',    abilityName: 'Lure — Hypnosis',       abilityDesc: 'Every 7 seconds it clouds your mind: your paddle controls invert for 1.8s.' },
+  falcon:   { icon: '🦅', name: 'The Falcon',   title: 'EYES ON THE PREY', color: '#fca5a5', speed: 650, react: 0.045, error: 7,   predict: true,  paddleMult: 0.85, aim: 1.0,  personality: 'aggressive', ability: 'hunt',    abilityName: 'Hunt — Open Court',      abilityDesc: 'It always finds the open space: every return is aimed at the spot you are NOT covering.' },
+  tortoise: { icon: '🐢', name: 'The Tortoise', title: 'UNMOVABLE',        color: '#86efac', speed: 280, react: 0.16,  error: 24,  predict: false, paddleMult: 2.00, aim: 0.1,  personality: 'defense',    ability: 'shell',   abilityName: 'Shell — Weak Spot',      abilityDesc: 'A colossal, near-unmovable paddle — but every 5 seconds it withdraws into its shell, shrinking for 1s. Strike then.' },
+  bastion:  { icon: '🏰', name: 'The Bastion',  title: 'IRON CURTAIN',     color: '#9ad0ff', speed: 380, react: 0.13,  error: 14,  predict: true,  paddleMult: 1.45, aim: 0.1,  personality: 'defense',    ability: 'bastion', abilityName: 'Wall — Iron Curtain',    abilityDesc: 'Every 6 seconds it raises an energy wall that catches ONE ball that slips past its paddle. Pure defense.' },
+  echo:     { icon: '👥', name: 'The Echo',     title: 'TWICE THE TROUBLE', color: '#7dd3fc', speed: 500, react: 0.065, error: 10,  predict: true,  paddleMult: 0.90, aim: 0.4,  personality: 'tricky',     ability: 'echo',    abilityName: 'Echo — Afterimage',      abilityDesc: 'Every 6 seconds it leaves a ghost of itself that returns the ball at double angle. Aim where it is NOT.' },
+  zephyr:   { icon: '🌬️', name: 'The Zephyr',  title: 'WHIRLWIND',        color: '#a5f3fc', speed: 540, react: 0.055, error: 8,   predict: true,  paddleMult: 0.85, aim: 0.7,  personality: 'tricky',     ability: 'gust',    abilityName: 'Gust — Wind Spirals',    abilityDesc: 'Every 7 seconds it summons a gust that wobbles every ball in flight for 2.5s. Read the air.' },
+  ogre:     { icon: '👹', name: 'The Ogre',     title: 'BLOODRAGE',        color: '#f87171', speed: 600, react: 0.06,  error: 9,   predict: true,  paddleMult: 1.10, aim: 0.5,  personality: 'aggressive', ability: 'rage',    abilityName: 'Rage — Bulldoze',        abilityDesc: 'Every 7 seconds it enters a rage for 3s: 2.2× movement and every hit carries +30 speed with rough spin.' },
+  phantom:  { icon: '👻', name: 'The Phantom',  title: 'SINISTER',         color: '#c084fc', speed: 680, react: 0.035, error: 4,   predict: true,  paddleMult: 0.90, aim: 0.7,  personality: 'eccentric',  ability: 'phantom', abilityName: 'Phase — Intangible',       abilityDesc: 'Every 5 seconds it phases out and ghosts toward the ball for 1.2s — your shots pass straight through.' },
+  weaver:   { icon: '🕸️', name: 'The Weaver',  title: 'WEB OF DOOM',      color: '#f0abfc', speed: 530, react: 0.12,  error: 15,  predict: true,  paddleMult: 1.10, aim: 0.5,  personality: 'eccentric',  ability: 'weaver',  abilityName: 'Hive — Swarm',           abilityDesc: 'Every 8 seconds it spins TWO new balls into play (up to 4). Chaos in motion.' },
+  mirror:   { icon: '🪞', name: 'The Mirror',   title: 'REFLEXION',        color: '#f472b6', speed: 605, react: 0.055, error: 8,   predict: true,  paddleMult: 1.00, aim: 0.8,  personality: 'tricky',     ability: 'mirror',  abilityName: 'Reflection — Magnified', abilityDesc: 'Its returns double their angle AND carry heavy spin. Wild curves that are brutal to read.' },
+  titan:    { icon: '🗿', name: 'The Titan',    title: 'MOUNTAIN',         color: '#b0b7c9', speed: 470, react: 0.09,  error: 9,   predict: true,  paddleMult: 1.25, aim: 0.5,  personality: 'aggressive', ability: 'quake',   abilityName: 'Quake — Seismic Slam',   abilityDesc: 'Every 7 seconds it slams the arena: shake, +40 speed AND wild spin on every ball. Every 10s it charges a SEISMIC POWER SHOT.' , charge: 10 },
+  warlock:  { icon: '🧙', name: 'The Warlock',  title: 'CURSEBRINGER',     color: '#a3e635', speed: 555, react: 0.07,  error: 10,  predict: true,  paddleMult: 1.05, aim: 0.6,  personality: 'eccentric',  ability: 'hex',     abilityName: 'Hex — Cursed Grip',      abilityDesc: 'Every 6 seconds it curses your paddle (30% shorter & slower). Every 12s it charges a CURSED BOLT.' , charge: 12 },
+  archon:   { icon: '⚡', name: 'The Archon',   title: 'STORM OF FATE',    color: '#fde047', speed: 560, react: 0.045, error: 6,   predict: true,  paddleMult: 1.15, aim: 0.7,  personality: 'eccentric',  ability: 'storm',   abilityName: 'Storm — Lightning',      abilityDesc: 'Every 8 seconds it summons a storm: every ball gains +30 speed and wild spin, and its electrified returns add +50. Every 11s it charges a THUNDER POWER SHOT.', charge: 11 },
+  leviathan:{ icon: '🌊', name: 'The Leviathan', title: 'DEEP TIDE',       color: '#60a5fa', speed: 540, react: 0.06,  error: 8,   predict: true,  paddleMult: 1.30, aim: 0.6,  personality: 'eccentric',  ability: 'tide',    abilityName: 'Tide — Undertow',        abilityDesc: 'Every 9 seconds a tide drags every ball vertically for 3s, swapping direction each time. Every 13s it charges a TIDAL POWER SHOT.', charge: 13 },
+};
+const NORMAL_POOL = ['wall', 'viper', 'diviner', 'smasher', 'glacier', 'gambler', 'knight', 'siren', 'falcon', 'tortoise', 'bastion', 'echo', 'zephyr', 'ogre'];
+const BOSS_POOL = ['phantom', 'weaver', 'mirror', 'titan', 'warlock', 'archon', 'leviathan'];
+const PERSONA = { defense: 'PURE DEFENSE', tricky: 'TRICKY SHOTS', aggressive: 'AGGRESSIVE', eccentric: 'ECCENTRIC' };
+
+/* ============================== State ============================== */
+let state = 'menu';            // menu | intro | draft | play | paused | defeat | over
+let run = { lives: START_LIVES, round: 1, powerups: [], upgrades: [], gold: 0 };
+let curAI = null;
+let oppBoss = false;
+let scores = { p: 0, c: 0 };
+let balls = [];
+let paddleL = { x: 0, y: 0, vy: 0 };
+let paddleR = { x: 0, y: 0, vy: 0 };
+let paddleR2 = { x: 0, y: 0 };
+let W = 0, H = 0;
+let tNow = 0, last = 0;
+let particles = [], ghosts = [];
+let shake = 0;
+let serveTimer = 0;
+let msg = '', msgT = 0;
+let cpuRerollT = 0, cpuTarget = 0;
+let hist = [];
+let ghostCharges = 0, shieldsLeft = 0, vampGrow = 0, cpuShrink = 0;
+let cpuFury = 0;   // CPU Fury: each denied point makes the CPU deadlier for the rest of the match
+let phaseActive = false, phaseDur = 0, surgeActive = 0, frozenLeft = 0, weaverT = 0, surgeT = 0, phaseT = 0;
+let frostT = 0, warpT = 10, warpActive = 0, doomT = 4, hexT = 6, hexActive = 0, quakeT = 7, quakeActive = 0;
+let ghostCd = 0, charmed = false, empT = 7, empLockT = 0, glitchT = 6, glitchActiveT = 0, tremorT = 0, searT = 0, stillT = 0;
+let gambleT = 4, gambleFreeze = 0, parryT = 6, parryActive = 0, lureT = 7, lureActive = 0, shellT = 5, shellOpen = 0;
+let batteryT = 8, batteryReady = false;
+let chargeT = 0, chargeActive = 0;   // boss power-shot charge window
+let procs = [];
+let phoenixUsed = false;
+let serveLaunchT = 0;
+let shopOffers = [];
+let bastionT = 6, bastionActive = 0, echoT = 6, echoActive = 0, echoY = 0;
+let gustT = 7, gustActive = 0, rageT = 7, rageActive = 0;
+let stormT = 8, stormActive = 0, tideT = 9, tideActive = 0, tideDir = 1;
+let pendingDrafts = 0, draftContext = 'start';
+let mouseY = 0, mouseActive = false;
+const keys = {};
+let muted = false;
+let sfx = null;
+
+/* Meta-progression + run modifiers + arena condition state */
+let runStakes = [];              // stake ids chosen for the current run
+let curCond = null;              // active arena condition id (null = none)
+let obstacles = [];              // drifting obstacle blocks (Blockades hazard)
+let ghostSpawnT = 0;
+let slickV = 0;                  // Slick Ice paddle momentum
+let eventSeen = false;           // whether an event already appeared this round
+
+const has = id => run.powerups.includes(id);
+const stacks = id => run.powerups.filter(x => x === id).length;
+const stacksU = id => (run.upgrades || []).filter(x => x === id).length;
+function maxLives() { return Math.min(MAX_LIVES, START_LIVES + stacksU('shop_heart') + META_UPGRADES.meta_hp.inc * metaLvl('meta_hp')); }   // display matches the hard cap
+
+/* ============================== Meta-progression (persists across runs) ============================== */
+let META = { cores: 0, upg: {}, seenPups: [], seenAI: [], seenSyn: [] };
+function metaLoad() {
+  try { const d = JSON.parse(storeGet('neonpong_meta') || 'null'); if (d && typeof d === 'object') META = Object.assign(META, d); META.upg = META.upg || {}; META.seenPups = META.seenPups || []; META.seenAI = META.seenAI || []; META.seenSyn = META.seenSyn || []; } catch (e) { /* ignore */ }
+}
+function metaSave() { try { storeSet('neonpong_meta', JSON.stringify(META)); } catch (e) { /* ignore */ } }
+function metaLvl(id) { return META.upg[id] || 0; }
+function metaMaxed(id) { return metaLvl(id) >= META_UPGRADES[id].max; }
+function earnCores(n) { META.cores += n; metaSave(); updateMetaUI(); }
+function codexPup(id) {
+  if (META.seenPups.includes(id)) return;
+  META.seenPups.push(id); META.cores += 1; metaSave();
+  msgFlash('CODEX: ' + POWERUPS[id].name + ' +1⚡');
+}
+function codexAI(id) {
+  if (META.seenAI.includes(id)) return;
+  META.seenAI.push(id); META.cores += 1; metaSave();
+  msgFlash('CODEX: ' + AIS[id].name + ' +1⚡');
+}
+function codexSyn(id) {
+  const s = SYNERGIES.find(x => x.id === id);
+  if (!s || META.seenSyn.includes(id)) return;
+  META.seenSyn.push(id); META.cores += 1; metaSave();
+  procFlash('SYNERGY! ' + s.name + ' +1⚡', W / 2, H / 2 - 60, '#38e1ff');
+  sfxWin();
+}
+function updateMetaUI() {
+  const el = $('menuCores'); if (el) el.textContent = '⚡ CORES: ' + META.cores;
+  const mc = $('metaCores'); if (mc) mc.textContent = 'CORES: ' + META.cores;
+  const cl = $('codexLine');
+  if (cl) cl.textContent = `Powerups ${META.seenPups.length}/${POWERUP_IDS.length} · Champions ${META.seenAI.length}/${Object.keys(AIS).length} · Synergies ${META.seenSyn.length}/${SYNERGIES.length}`;
+}
+function upgradeMeta(id) {
+  const u = META_UPGRADES[id];
+  if (metaMaxed(id) || META.cores < u.cost) return;
+  META.cores -= u.cost;
+  META.upg[id] = metaLvl(id) + 1;
+  metaSave(); sfxPick();
+  renderMetaList();
+}
+function renderMetaList() {
+  const el = $('metaList');
+  el.innerHTML = '';
+  META_IDS.forEach((id, i) => {
+    const u = META_UPGRADES[id];
+    const lvl = metaLvl(id), maxed = metaMaxed(id);
+    const card = document.createElement('div');
+    card.className = 'meta-card' + (maxed ? ' maxed' : '');
+    card.style.animationDelay = (i * 0.04) + 's';
+    card.innerHTML = `<div class="mt-ic">${u.icon}</div><div style="flex:1"><div class="mt-name">${u.name}</div><div class="mt-desc">${u.desc}</div></div><div class="mt-lvl">LV ${lvl}/${u.max}</div>`;
+    if (!maxed) {
+      const b = document.createElement('button');
+      b.className = 'btn ghost mt-btn';
+      b.style.cssText = 'font-size:8px; padding:10px 14px;';
+      b.textContent = (META.cores >= u.cost ? '' : '') + u.cost + '⚡';
+      b.disabled = META.cores < u.cost;
+      b.addEventListener('click', () => upgradeMeta(id));
+      card.appendChild(b);
+    }
+    el.appendChild(card);
+  });
+  updateMetaUI();
+}
+
+function shopPrice(it) { return Math.max(1, Math.round(it.price * (1 - 0.10 * metaLvl('meta_disc')))); }
+
+/* ============================== Helpers ============================== */
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+// Diminishing returns: each stack is worth ~22% less than the last, so stacking never
+// lets a stat run away (the game's scaling philosophy — strong early, capped late).
+function dimStacks(n, per) { let s = 0; for (let i = 0; i < n; i++) s += per * Math.pow(0.78, i); return s; }
+// Bernoulli stacking for chances: 20% + 20% + ... approaches ~67%, never 100%.
+function bern(base, n) { return 1 - Math.pow(1 - base, n); }
+function storeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function storeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+
+/* ============================== Audio ============================== */
+function ensureAudio() {
+  if (!sfx) { try { sfx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { sfx = null; } }
+}
+function beep(f0, f1, dur, type, vol) {
+  if (muted || !sfx) return;
+  try {
+    const t = sfx.currentTime;
+    const o = sfx.createOscillator(), g = sfx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(Math.max(1, f0), t);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(sfx.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  } catch (e) { /* ignore */ }
+}
+const sfxPaddle = s => beep(170 + Math.min(s, BALL_MAX) * 0.45, 330, 0.07, 'square', 0.10);
+const sfxWall   = () => beep(430, 310, 0.05, 'triangle', 0.09);
+const sfxServe  = () => beep(300, 340, 0.09, 'triangle', 0.08);
+const sfxScore  = () => beep(540, 190, 0.28, 'sawtooth', 0.13);
+const sfxPick   = () => { [660, 880].forEach((f, i) => setTimeout(() => beep(f, f, 0.12, 'square', 0.1), i * 70)); };
+const sfxShield = () => beep(700, 900, 0.18, 'sine', 0.14);
+const sfxGhost  = () => beep(500, 300, 0.15, 'sine', 0.1);
+const sfxWin    = () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, f, 0.14, 'square', 0.11), i * 95));
+const sfxLose   = () => beep(300, 110, 0.55, 'sawtooth', 0.12);
+
+/* ============================== Setup ============================== */
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  W = Math.max(1, Math.round(rect.width));
+  H = Math.max(1, Math.round(rect.height));
+  PIXEL = Math.min(0.6, Math.max(0.35, 800 / Math.max(W, 1)));
+  canvas.width = Math.max(1, Math.round(W * PIXEL));
+  canvas.height = Math.max(1, Math.round(H * PIXEL));
+  paddleL.x = EDGE + PADDLE_W / 2;
+  paddleR.x = W - EDGE - PADDLE_W / 2;
+  paddleR2.x = paddleR.x;
+  paddleL.y = clamp(paddleL.y, PADDLE_H / 2, H - PADDLE_H / 2);
+  paddleR.y = clamp(paddleR.y, PADDLE_H / 2, H - PADDLE_H / 2);
+  paddleR2.y = clamp(paddleR2.y, PADDLE_H / 2, H - PADDLE_H / 2);
+  balls.forEach(b => { b.x = clamp(b.x, BALL_R, W - BALL_R); b.y = clamp(b.y, BALL_R, H - BALL_R); });
+  if (state === 'menu' && !balls.length) { balls.push({ x: W / 2, y: H / 2, speed: 120, vx: 120, vy: 60, spin: 0 }); }
+}
+
+/* ============================== Run / match flow ============================== */
+function updateScores() { scorePEl.textContent = scores.p; scoreCEl.textContent = scores.c; }
+
+function updateHearts() {
+  let s = '';
+  for (let i = 0; i < maxLives(); i++) s += i < run.lives ? '❤️' : '<span class="dead">🖤</span>';
+  heartsEl.innerHTML = s;
+}
+
+function updateGold() {
+  const stkMark = (run.stakes && run.stakes.length) ? ' ⚔️×' + goldMult().toFixed(1) : '';
+  $('goldChip').textContent = '🪙 ' + run.gold + stkMark;
+  $('shopGold').textContent = 'GOLD: ' + run.gold;
+  $('introGold').textContent = '🪙 GOLD: ' + run.gold;
+}
+
+function updatePupIcons() {
+  if (!run.powerups.length) { pupIconsEl.innerHTML = ''; }
+  else {
+    const counts = {};
+    run.powerups.forEach(id => counts[id] = (counts[id] || 0) + 1);
+    pupIconsEl.innerHTML = Object.entries(counts)
+      .map(([id, n]) => `<span class="pup-chip" title="${POWERUPS[id].name}">${POWERUPS[id].icon}${n > 1 ? ' ×' + n : ''}</span>`)
+      .join('');
+  }
+  // Synergy indicator chips (Gungeon-style blue arrows for active combos).
+  const syns = activeSynergies();
+  const synEl = $('synIcons');
+  if (!syns.length) { synEl.innerHTML = ''; return; }
+  synEl.innerHTML = syns.map(s => `<span class="syn-chip" title="${s.name} — ${s.desc}">✦ ${s.icon} ${s.name}</span>`).join('');
+}
+
+function updateBestLine() {
+  const best = parseInt(storeGet('pong_run_best') || '0', 10) || 0;
+  $('menuBest').textContent = best > 0 ? 'BEST RUN: ROUND ' + best : 'BEST RUN: —';
+}
+
+function hideOverlays() {
+  [introEl, draftEl, defeatEl, overEl, pauseEl, stakesEl, metaEl, eventEl, shopEl].forEach(el => { if (el) el.classList.add('hidden'); });
+}
+function showMenu() {
+  state = 'menu';
+  menuEl.classList.remove('hidden');
+  hideOverlays();
+  if (!balls.length) { balls.push({ x: W / 2, y: H / 2, speed: 120, vx: 120, vy: 60, spin: 0 }); }
+  updateBestLine();
+  updateMetaUI();
+}
+
+function opponentFor(round) {
+  if (round % 5 === 0) return { id: BOSS_POOL[((round / 5) - 1) % BOSS_POOL.length], ai: AIS[BOSS_POOL[((round / 5) - 1) % BOSS_POOL.length]], boss: true };
+  const nonBoss = round - 1 - Math.floor((round - 1) / 5);
+  const id = NORMAL_POOL[nonBoss % NORMAL_POOL.length];
+  return { id, ai: AIS[id], boss: false };
+}
+
+/* Stakes, synergy + condition helpers */
+function hasStake(id) { return run.stakes && run.stakes.includes(id); }
+function goldMult() {
+  let m = run.betrayal || 1;
+  for (const s of run.stakes || []) { const st = STAKES.find(x => x.id === s); if (st) m += st.gold; }
+  return m;
+}
+function synergyActive(s) { return !!s && has(s.a) && has(s.b); }
+function activeSynergies() { return SYNERGIES.filter(synergyActive); }
+function rollCondition(boss) {
+  if (hasStake('stk_chaos')) return CONDITIONS[Math.floor(Math.random() * CONDITIONS.length)].id;
+  const chance = boss ? 0.85 : 0.55;
+  if (Math.random() < chance) return CONDITIONS[Math.floor(Math.random() * CONDITIONS.length)].id;
+  return null;
+}
+
+function aiStats(opp) {
+  const a = opp.ai;
+  // CPUs scale with BOTH the round AND your build: every powerup/upgrade you take makes
+  // the roster a little faster and a little bigger, so you can never out-invest them into
+  // an untouchable stat line. Growth is capped so it stays hard-but-possible.
+  const invested = (run.powerups.length || 0) + (run.upgrades.length || 0);
+  const inv = Math.min(1.85, 1 + invested * 0.04);
+  const mult = Math.min(2.15, (1 + (run.round - 1) * 0.065) * inv * (opp.boss ? 1.12 : 1) * (run.cpuBoost || 1) * (hasStake('stk_frenzy') ? 1.2 : 1));
+  const padMult = Math.min(1.75, 1 + invested * 0.03);   // CPUs grow reach to match your wall-building
+  return {
+    ...a,
+    speed: a.speed * mult,
+    error: a.error * Math.max(0.55, 1 - (run.round - 1) * 0.03),
+    paddleH: PADDLE_H * a.paddleMult * padMult * (hasStake('stk_giant') ? 1.25 : 1),
+  };
+}
+
+function startRun() {
+  const lives = Math.min(MAX_LIVES, START_LIVES + stacksU('shop_heart') + metaLvl('meta_hp'));
+  run = { lives, round: 1, powerups: [], upgrades: [], gold: START_GOLD + 3 * metaLvl('meta_gold'), stakes: runStakes.slice(), freeRerolls: 0, betrayal: 1, cpuBoost: 1 };
+  phoenixUsed = false;
+  curCond = null; obstacles = [];
+  // Head Start meta upgrade: every run begins with a free random common powerup.
+  if (metaLvl('meta_start') > 0) {
+    const commons = POWERUP_IDS.filter(id => POWERUPS[id].rarity === 'common');
+    const pick = commons[Math.floor(Math.random() * commons.length)];
+    run.powerups.push(pick);
+    msgFlash('HEAD START: ' + POWERUPS[pick].name + '!');
+  }
+  updateHearts(); updatePupIcons();
+  pendingDrafts = 1;
+  draftContext = 'start';
+  openDraft('CHOOSE YOUR POWERUP', 'Pick 1 to start your run');
+}
+
+function showIntro() {
+  const opp = opponentFor(run.round);
+  const a = opp.ai;
+  curAI = aiStats(opp);
+  oppBoss = opp.boss;
+  $('roundLabel').textContent = (opp.boss ? '☠ BOSS ROUND ' : 'ROUND ') + run.round;
+  $('oppEmoji').textContent = a.icon;
+  $('oppName').textContent = a.name;
+  $('oppName').style.color = a.color;
+  $('oppTitle').textContent = a.title;
+  $('bossBadge').classList.toggle('hidden', !opp.boss);
+  $('oppCard').classList.toggle('boss', opp.boss);
+  $('oppAbility').textContent = a.abilityName;
+  $('oppAbilityDesc').textContent = a.abilityDesc;
+  $('oppPersona').textContent = 'PERSONALITY: ' + (PERSONA[a.personality] || 'ECCENTRIC');
+  // Roll the round's arena hazard here so the intro card previews it.
+  curCond = rollCondition(opp.boss);
+  $('oppCond').textContent = curCond ? (COND_BY_ID[curCond].icon + ' HAZARD — ' + COND_BY_ID[curCond].desc) : 'NO HAZARD THIS ROUND';
+  updateGold();
+  const maxSpd = 1000;
+  const spd = Math.min(100, Math.round(curAI.speed / maxSpd * 100));
+  const prec = Math.max(15, Math.round((1 - curAI.error / 70) * 100));
+  const size = Math.min(100, Math.round(a.paddleMult / 1.8 * 100));
+  $('oppStats').innerHTML = `
+    <div class="stat"><div class="lbl">Speed</div><div class="val">${Math.round(curAI.speed)}</div><div class="bar"><span style="width:${spd}%"></span></div></div>
+    <div class="stat"><div class="lbl">Precision</div><div class="val">${prec}</div><div class="bar"><span style="width:${prec}%"></span></div></div>
+    <div class="stat"><div class="lbl">Reach</div><div class="val">${Math.round(a.paddleMult * 100)}%</div><div class="bar"><span style="width:${size}%"></span></div></div>`;
+  state = 'intro';
+  menuEl.classList.add('hidden');
+  introEl.classList.remove('hidden');
+  updateBallPick();
+}
+
+function updateBallPick() {
+  const bp = $('ballPick'); if (!bp) return;
+  bp.innerHTML = BALL_TYPES.map(t => `<div class="stake-card${selBall === t.id ? ' on' : ''}" data-ball="${t.id}"><div class="st-ic">${t.icon}</div><div><div class="st-name">${t.name}</div><div class="st-desc">${t.desc}</div></div><div class="st-gold">${selBall === t.id ? 'READY' : ''}</div></div>`).join('');
+  for (const c of bp.children) c.addEventListener('click', () => { selBall = c.dataset.ball; updateBallPick(); sfxPick(); });
+}
+
+function startMatch() {
+  if (run.lives <= 0) return;   // a dead run can't be re-served
+  const opp = opponentFor(run.round);
+  curAI = aiStats(opp);
+  oppBoss = opp.boss;
+  codexAI(opp.id);
+  scores = { p: 0, c: 0 };
+  updateScores();
+  balls = [];
+  // Arena condition for this round (variety per level) — already previewed on the intro card.
+  obstacles = curCond === 'obstacles' ? [
+    { x: W * 0.35, y: H * 0.28, w: 12, h: 92, vy: 120, vx: 40 },
+    { x: W * 0.62, y: H * 0.72, w: 12, h: 92, vy: -120, vx: -40 },
+  ] : [];
+  ghostSpawnT = 3; slickV = 0;
+  // Stage hazards intensify as the run deepens (and with the Chaos Arena stake).
+  hazardScale = 1 + Math.min(1.0, (run.round - 1) * 0.14) + (hasStake('stk_chaos') ? 0.35 : 0);
+  const condEl = $('condChip');
+  condEl.textContent = curCond ? (COND_BY_ID[curCond].icon + ' ' + COND_BY_ID[curCond].name) : '';
+  $('oppCond').textContent = curCond ? (COND_BY_ID[curCond].icon + ' HAZARD — ' + COND_BY_ID[curCond].desc) : 'NO HAZARD THIS ROUND';
+  ghostCharges = Math.min(4, 2 * stacks('ghost_ball'));   // capped at 4 passes per round
+  shieldsLeft = stacks('shield');
+  vampGrow = 0; cpuShrink = 0; cpuFury = 0;   // reset per match
+  surgeActive = 0; phaseActive = false;
+  surgeT = 6; phaseT = 5; weaverT = 8;
+  quakeT = 7; quakeActive = 0; hexT = 6; hexActive = 0;
+  gambleT = 4; gambleFreeze = 0; parryT = 6; parryActive = 0; lureT = 7; lureActive = 0; shellT = 5; shellOpen = 0;
+  batteryT = Math.max(1.5, 8 * Math.pow(0.75, Math.max(0, stacks('battery') - 1))); batteryReady = false;   // Battery floors at 1.5s
+  chargeT = (curAI && curAI.charge) || 0; chargeActive = 0;
+  bastionT = 6; bastionActive = 0; echoT = 6; echoActive = 0;
+  gustT = 7; gustActive = 0; rageT = 7; rageActive = 0;
+  stormT = 8; stormActive = 0; tideT = 9; tideActive = 0; tideDir = Math.random() < 0.5 ? 1 : -1;
+  // Deep Freeze synergy: the freezer's cold lingers 2s longer.
+  frozenLeft = stacks('freezer') > 0 ? (synergyActive(SYNERGIES.find(s => s.id === 'syn_frost')) ? 6 : 4.5) : 0;
+  frostT = 0; warpT = Math.max(2, 10 * Math.pow(0.75, Math.max(0, stacks('time_warp') - 1))); warpActive = 0; doomT = 5;   // Chrono floors at 2s
+  ghostCd = 0; empT = 7; empLockT = 0; glitchT = 6; glitchActiveT = 0; tremorT = 0; searT = 0; stillT = 0;
+  // Charmed Round: the CPU's special ability may be disabled for the whole round (Fortuna Aegis makes it certain).
+  charmed = has('lucky') && (Math.random() < Math.min(0.95, 0.7 + 0.1 * (stacks('lucky') - 1)) || synergyActive(SYNERGIES.find(s => s.id === 'syn_shield')));
+  if (charmed) { msgFlash('🍀 CHARMED!'); sfxPick(); }
+  paddleL.y = paddleR.y = paddleR2.y = H / 2;
+  echoY = H / 2;
+  paddleL.vy = paddleR.vy = 0;
+  updateGold();
+  levelChipEl.textContent = (oppBoss ? '☠ BOSS · ' : '') + 'ROUND ' + run.round + ' · ' + curAI.name;
+  levelChipEl.classList.toggle('boss', oppBoss);
+  serve(1);
+  setMsg(oppBoss ? 'BOSS ROUND ' + run.round : 'ROUND ' + run.round);
+  introEl.classList.add('hidden');
+  defeatEl.classList.add('hidden');
+  pauseEl.classList.add('hidden');
+  state = 'play';
+  ensureAudio();
+}
+
+function serve(dir) {
+  balls = [newBall(W / 2, H / 2)];
+  const b = balls[0];
+  const tiltRand = has('sniper') ? 0.15 : 0.36;
+  const tilt = (Math.random() * 2 - 1) * tiltRand;
+  let serveSpd = BALL_START + 70 * dimStacks(stacks('speed_boost'), 1) + (hasStake('stk_fastball') ? 100 : 0);
+  // Sabotage: the CPU's serves (dir = 1, toward the player) are 20% slower per stack.
+  if (dir === 1 && stacksU('shop_serve') > 0) serveSpd = Math.round(serveSpd * Math.max(0.35, 1 - 0.2 * stacksU('shop_serve')));   // Sabotage floors at 35%: the CPU serve is slower, never a dead ball
+  b.speed = Math.min(serveSpd, BALL_HARD_MAX);
+  b.vx = Math.cos(tilt) * b.speed * dir;
+  b.vy = Math.sin(tilt) * b.speed;
+  if (curCond === 'bouncy') b.spin = (Math.random() < 0.5 ? 1 : -1) * 1.2;
+  // Twin Serve: launch +1 gently-angled ball per stack (max 4 total). Offsets stay tight so a
+  // single CPU paddle can always cover every serve ball (balanced, never a free point).
+  if (has('twin_serve') && balls.length < MAX_BALLS) {
+    // Twin Serve (max 3 total balls): the spread stays NARROWER than even the smallest
+    // CPU paddle, so every serve ball is physically receivable by the opponent.
+    const extra = Math.min(stacks('twin_serve'), MAX_BALLS - 1);
+    for (let i = 1; i <= extra; i++) {
+      const b2 = newBall(W / 2, H / 2);
+      b2.speed = b.speed;
+      const off = i * 0.045 * (i % 2 === 0 ? -1 : 1);   // ±0.045, ∓0.09 rad — inside any paddle
+      b2.vx = Math.cos(tilt + off) * b2.speed * dir;
+      b2.vy = Math.sin(tilt + off) * b2.speed;
+      balls.push(b2);
+    }
+  }
+  balls.forEach(initBallType);   // apply the chosen arena ball to every serve ball
+  serveTimer = Math.max(0.2, 1.0 * Math.pow(0.6, stacks('tempo')));   // Tempo floors: no infinite serve-spam
+  serveLaunchT = tNow;
+  hist = [];
+}
+
+function newBall(x, y) {
+  return { x, y, vx: 0, vy: 0, speed: BALL_START, spin: 0 };
+}
+
+/* ============================== Arena balls ============================== */
+function initBallType(b) {
+  b.type = selBall;
+  b.waveT = 0; b.flashT = 3.0 + Math.random(); b.holoT = 2.2 + Math.random();
+  b.jitterT = 0.9; b.trickDist = 0; b.trickFired = false; b.trickT = 0;
+  if (selBall === 'rocket') b.speed = Math.min(b.speed * 1.25, BALL_HARD_MAX);
+  else if (selBall === 'heavy') b.speed = b.speed * 0.92;
+}
+
+function bonkAt(x, y, speed) {
+  if (bonks.length > 10) bonks.shift();
+  bonks.push({ text: BONK_WORDS[Math.floor(Math.random() * BONK_WORDS.length)], color: BONK_COLORS[Math.floor(Math.random() * BONK_COLORS.length)], x, y, t: 0.62, max: 0.62, s: clamp(0.7 + speed / 1600, 0.7, 1.5), rot: (Math.random() * 2 - 1) * 0.3 });
+}
+
+function ballHitFx(b, byPlayer) {
+  if (b.mini || b.clone) return;   // spawned balls don't re-trigger ball-type effects
+  const tp = b.type || 'standard';
+  if (tp === 'rocket') b.speed = Math.min(b.speed + 30, BALL_HARD_MAX);
+  else if (tp === 'charge') b.speed = Math.min(b.speed + 45, BALL_HARD_MAX);
+  else if (tp === 'split') spawnSplitMini(b);
+  else if (tp === 'chill') {
+    if (byPlayer) { frostT = Math.max(frostT, 1.2); procFlash('CHILL!', b.x, b.y, '#7dd3fc'); }
+    else { playerSlowT = 1.2; procFlash('CHILLED!', b.x, b.y, '#7dd3fc'); }
+  }
+  else if (tp === 'trick') { b.trickFired = false; b.trickDist = 0; }
+  bonkAt(b.x, b.y, b.speed);
+}
+
+function spawnSplitMini(b) {
+  if (balls.length >= MAX_BALLS + 2) return;
+  const sp = b.speed * 0.85;
+  const ang = Math.atan2(Math.abs(b.vy), Math.abs(b.vx) || 1) + (Math.random() * 2 - 1) * 0.5;
+  const nb = { x: b.x, y: clamp(b.y, BALL_R, H - BALL_R), speed: sp, vx: Math.sign(b.vx || 1) * Math.cos(ang) * sp, vy: Math.sign(b.vy || 1) * Math.sin(ang) * sp, spin: 0, mini: true, life: 2.5 };
+  balls.push(nb);
+}
+
+function spawnHoloClones(b) {
+  if (balls.length > MAX_BALLS + 4) return;
+  for (const oy of [1, -1]) {
+    balls.push({ x: b.x, y: b.y + oy * 26, speed: b.speed, vx: b.vx, vy: b.vy, spin: 0, clone: true, life: 2.2 });
+  }
+  procFlash('HOLO!', b.x, b.y, '#8ef0ff');
+}
+
+function flashBang(b) {
+  const towardCPU = b.vx < 0;
+  spawnBurst(b.x, b.y, '#ffffff', 18);
+  shake = Math.min(shake + 6, 12);
+  bonkAt(b.x, b.y, b.speed + 200);
+  if (towardCPU) {
+    empLockT = Math.max(empLockT, 0.45);   // stun the CPU for a blink
+    msgFlash('💥 FLASH!');
+    procFlash('STUNNED!', b.x, b.y, '#fde047');
+  } else {
+    flashVig = 0.26;   // the player gets a white blink, no control loss
+    msgFlash('💥 FLASH!');
+    shake = Math.min(shake + 8, 13);
+  }
+  sfxWall();
+}
+
+function point(side) {
+  if (state !== 'play') return;
+  if (side === 'p') { scores.p++; setMsg('YOU SCORE!'); }
+  else { scores.c++; setMsg('CPU SCORES!'); }
+  updateScores();
+  shake = Math.min(shake + 9, 15);
+  spawnBurst(balls.length ? balls[0].x : W / 2, balls.length ? balls[0].y : H / 2, side === 'p' ? COLORS.player : COLORS.cpu, 42);
+  sfxScore();
+  const cpuWinAt = has('iron_wall') ? WIN_SCORE + 1 : (hasStake('stk_extra') ? 4 : WIN_SCORE);
+  if (scores.p >= WIN_SCORE) { winMatch(); return; }
+  if (scores.c >= cpuWinAt) { loseMatch(); return; }
+  serve(side === 'p' ? -1 : 1);
+  resetPaddles();
+}
+
+function winMatch() {
+  // Performance-based gold (Balatro-style): more for a clean, fast, decisive win.
+  const clean = scores.c === 0 ? 4 : 0;
+  const margin = Math.max(0, 3 - scores.c);   // big margin = bigger purse
+  const gold = Math.round((2 + scores.p + clean + margin) * goldMult());
+  run.gold += gold;
+  updateGold();
+  msgFlash('+' + gold + ' GOLD');
+  state = 'over';
+  msgFlash('VICTORY!');
+  sfxWin();
+  spawnConfetti();
+  pendingDrafts = 2;
+  draftContext = 'victory';
+  setTimeout(() => {
+    if (state === 'over') openDraft('VICTORY!', 'CHOOSE 2 POWERUPS');
+  }, 350);
+}
+
+function loseMatch() {
+  run.gold += Math.round(scores.p * goldMult());   // consolation: you keep what you scored (scaled)
+  updateGold();
+  run.lives--;
+  updateHearts();
+  sfxLose();
+  if (run.lives <= 0) {
+    if (has('phoenix') && !phoenixUsed) {
+      phoenixUsed = true;
+      // Immortal Rite synergy: Phoenix + extra life revives you with 3 lives, not 1.
+      run.lives = synergyActive(SYNERGIES.find(s => s.id === 'syn_life')) ? 3 : 1;
+      updateHearts();
+      msgFlash('PHOENIX!');
+      sfxWin();
+      defeatEl.classList.add('hidden');
+      startMatch();
+      return;
+    }
+    runOver(); return;
+  }
+  state = 'defeat';
+  $('defeatSummary').innerHTML = `Round ${run.round} — ${(curAI && curAI.name) || 'The Arena'} won the match.<br>Lives left: ${'❤️'.repeat(run.lives)}${'🖤'.repeat(Math.max(0, maxLives() - run.lives))}<br>Your powerups and gold carry over.`;
+  defeatEl.classList.remove('hidden');
+}
+
+function runOver() {
+  state = 'over';
+  const reached = run.round - 1;
+  const best = parseInt(storeGet('pong_run_best') || '0', 10) || 0;
+  if (reached > best) storeSet('pong_run_best', String(reached));
+  // Meta-progression: every run pays out Cores (Hades Mirror style) so death still progresses.
+  const cores = Math.max(2, reached + (run.lives > 0 ? 1 : 0) + (oppBoss ? 2 : 0));
+  earnCores(cores);
+  $('runSummary').innerHTML = `You fell at Round ${run.round} against ${(curAI && curAI.name) || 'The Arena'}.<br>Rounds cleared: ${reached}<br>Powerups held: ${run.powerups.length}<br>+${cores} ⚡ CORES earned`;
+  $('runBest').textContent = 'BEST RUN: ROUND ' + Math.max(best, reached);
+  overEl.classList.remove('hidden');
+}
+
+/* ============================== Draft ============================== */
+function rarityWeight(r) {
+  const luck = metaLvl('meta_luck');
+  if (r === 'epic') return 10 + luck;
+  if (r === 'rare') return 32 + luck;
+  return Math.max(20, 58 - luck * 2);
+}
+function weightedRoll() {
+  const total = POWERUP_IDS.reduce((s, id) => s + rarityWeight(POWERUPS[id].rarity), 0);
+  let r = Math.random() * total;
+  for (const id of POWERUP_IDS) {
+    r -= rarityWeight(POWERUPS[id].rarity);
+    if (r < 0) return id;
+  }
+  return POWERUP_IDS[POWERUP_IDS.length - 1];
+}
+function rollOffers(n) {
+  const out = [];
+  for (let tries = 0; tries < 120 && out.length < n; tries++) {
+    const id = weightedRoll();
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
+function openDraft(title, sub) {
+  state = 'draft';
+  $('draftTitle').textContent = title;
+  $('draftSub').textContent = sub + ' · PICK ' + (draftContext === 'start' ? 'YOUR STARTER' : (3 - pendingDrafts) + ' OF 2');
+  const offers = rollOffers(3 + Math.floor(metaLvl('meta_luck') / 10));
+  const cardsEl = $('draftCards');
+  cardsEl.innerHTML = '';
+  offers.forEach((id, i) => {
+    const p = POWERUPS[id];
+    const card = document.createElement('div');
+    card.className = 'draft-card rarity-' + p.rarity;
+    card.style.animationDelay = (i * 0.06) + 's';
+    // Show a synergy hint if picking this powerup would complete a combo.
+    const combo = SYNERGIES.find(s => (s.a === id && has(s.b)) || (s.b === id && has(s.a)));
+    card.innerHTML = `<div class="pup-icon">${p.icon}</div><div class="pup-name">${p.name}</div><div class="pup-rarity">${p.rarity}</div><div class="pup-desc">${p.desc}</div>${combo ? `<div class="draft-syn">✨ SYNERGY: ${combo.name}</div>` : ''}`;
+    card.addEventListener('click', () => pickDraft(id));
+    cardsEl.appendChild(card);
+  });
+  renderOwned();
+  hideOverlays();
+  draftEl.classList.remove('hidden');
+}
+
+function renderOwned() {
+  const counts = {};
+  run.powerups.forEach(id => counts[id] = (counts[id] || 0) + 1);
+  $('ownedPups').innerHTML = run.powerups.length
+    ? Object.entries(counts).map(([id, n]) => `<span class="owned-chip">${POWERUPS[id].icon} ${POWERUPS[id].name}${n > 1 ? ' <span class="cnt">×' + n + '</span>' : ''}</span>`).join('')
+    : '<span class="owned-chip">No powerups yet</span>';
+}
+
+let lastPickT = 0;
+function pickDraft(id) {
+  if (pendingDrafts <= 0) return;
+  const now = performance.now();
+  if (now - lastPickT < 150) return;
+  lastPickT = now;
+  run.powerups.push(id);
+  codexPup(id);
+  if (id === 'extra_life') { run.lives = Math.min(maxLives(), run.lives + 1); updateHearts(); }
+  updatePupIcons();
+  sfxPick();
+  spawnBurst(W / 2, H / 2, '#ffd76a', 30);
+  activeSynergies().forEach(s => codexSyn(s.id));
+  pendingDrafts--;
+  if (pendingDrafts > 0) {
+    openDraft('VICTORY!', 'CHOOSE 2 POWERUPS');
+  } else {
+    draftEl.classList.add('hidden');
+    openShop();   // shop visit after every draft (Balatro flow), then on to the next opponent
+  }
+}
+
+/* ============================== Shop (Balatro-style) ============================== */
+function rollShop(n) {
+  const out = [];
+  for (let tries = 0; tries < 120 && out.length < n; tries++) {
+    const total = SHOP_IDS.reduce((s, id) => s + SHOP_ITEMS[id].weight, 0);
+    let r = Math.random() * total;
+    for (const id of SHOP_IDS) {
+      r -= SHOP_ITEMS[id].weight;
+      if (r < 0) { if (!out.includes(id)) out.push(id); break; }
+    }
+  }
+  return out;
+}
+function openShop() {
+  state = 'shop';
+  // Balatro-style interest: earn gold on savings each shop visit (scaled by meta + shop ledger).
+  const cap = 5 + metaLvl('meta_int') + stacksU('shop_interest');
+  const rate = Math.max(1, 4 - metaLvl('meta_int'));
+  const interest = Math.min(cap, Math.floor(run.gold / rate));
+  if (interest > 0) {
+    run.gold += interest;
+    msgFlash('+' + interest + ' INTEREST');
+  }
+  // Reroll Tokens: free rerolls from shop upgrades / events.
+  run.freeRerolls = (run.freeRerolls || 0) + stacksU('shop_reroll');
+  shopOffers = rollShop(4);
+  renderShop();
+  hideOverlays();
+  shopEl.classList.remove('hidden');
+  updateGold();
+  sfxPick();
+}
+function renderShop() {
+  const el = $('shopItems');
+  el.innerHTML = '';
+  shopOffers.forEach((id, i) => {
+    const it = SHOP_ITEMS[id];
+    const owned = stacksU(id);
+    const price = shopPrice(it);
+    const card = document.createElement('div');
+    card.className = 'shop-card' + (run.gold < price ? ' poor' : '');
+    card.style.animationDelay = (i * 0.05) + 's';
+    card.innerHTML = `<div class="pup-icon">${it.icon}</div><div class="pup-name">${it.name}</div><div class="pup-desc">${it.desc}</div><div class="shop-price">${owned > 0 ? 'OWNED ×' + owned + ' · ' : ''}${price} 🪙</div>`;
+    card.addEventListener('click', () => buyShop(id));
+    el.appendChild(card);
+  });
+  const counts = {};
+  run.upgrades.forEach(id => counts[id] = (counts[id] || 0) + 1);
+  $('shopOwned').innerHTML = run.upgrades.length
+    ? Object.entries(counts).map(([id, n]) => `<span class="owned-chip">${SHOP_ITEMS[id].icon} ${SHOP_ITEMS[id].name}${n > 1 ? ' <span class="cnt">×' + n + '</span>' : ''}</span>`).join('')
+    : '<span class="owned-chip">No upgrades yet</span>';
+  $('btnReroll').disabled = run.gold < 3;
+  $('btnReroll').textContent = 'Reroll (3🪙)' + (run.freeRerolls > 0 ? ' ×' + run.freeRerolls : '');
+  updateGold();
+}
+function buyShop(id) {
+  const it = SHOP_ITEMS[id];
+  const price = shopPrice(it);
+  if (!shopOffers.includes(id)) return;
+  if (run.gold < price) { msgFlash('NOT ENOUGH GOLD'); sfxLose(); return; }
+  run.gold -= price;
+  run.upgrades.push(id);
+  if (id === 'shop_heart') run.lives = Math.min(maxLives(), run.lives + 1);
+  if (id === 'shop_regen') run.lives = Math.min(maxLives(), run.lives + 1);
+  shopOffers = shopOffers.filter(x => x !== id);
+  updateHearts(); updateGold(); renderShop();
+  sfxPick();
+  spawnBurst(W / 2, H / 2, '#ffd76a', 24);
+  msgFlash(it.name.toUpperCase() + '!');
+}
+function rerollShop() {
+  if (run.freeRerolls > 0) {
+    run.freeRerolls--;
+    shopOffers = rollShop(4);
+    renderShop();
+    sfxPick();
+    return;
+  }
+  if (run.gold < 3) { msgFlash('NOT ENOUGH GOLD'); sfxLose(); return; }
+  run.gold -= 3;
+  shopOffers = rollShop(4);
+  renderShop();
+  sfxPick();
+}
+function leaveShop() {
+  shopEl.classList.add('hidden');
+  if (draftContext === 'start') showIntro();   // starter draft -> shop -> round 1
+  else if (Math.random() < 0.45) openEvent();  // victory draft -> shop -> occasional Wayside event
+  else { run.round++; showIntro(); }           // victory draft -> shop -> next round
+}
+
+/* ============================== Stakes (run modifiers) ============================== */
+function openStakes() {
+  state = 'stakes';
+  hideOverlays();   // never stack the stakes screen over a game-over card (buttons become unclickable)
+  const el = $('stakeList');
+  el.innerHTML = '';
+  STAKES.forEach((s, i) => {
+    const card = document.createElement('div');
+    card.className = 'stake-card' + (runStakes.includes(s.id) ? ' on' : '');
+    card.style.animationDelay = (i * 0.05) + 's';
+    card.innerHTML = `<div class="st-ic">${s.icon}</div><div style="flex:1"><div class="st-name">${s.name}</div><div class="st-desc">${s.desc}</div></div><div class="st-gold">+${Math.round(s.gold * 100)}% GOLD</div>`;
+    card.addEventListener('click', () => {
+      const idx = runStakes.indexOf(s.id);
+      if (idx >= 0) runStakes.splice(idx, 1); else runStakes.push(s.id);
+      openStakes();
+    });
+    el.appendChild(card);
+  });
+  $('stakeTotal').textContent = 'GOLD MULTIPLIER: ×' + (1 + runStakes.reduce((a, id) => a + (STAKES.find(x => x.id === id)?.gold || 0), 0)).toFixed(1);
+  updateMetaUI();
+  menuEl.classList.add('hidden');
+  stakesEl.classList.remove('hidden');
+}
+function closeStakes() { stakesEl.classList.add('hidden'); showMenu(); }
+function beginRunWithStakes() { stakesEl.classList.add('hidden'); startRun(); }
+
+/* ============================== Meta upgrades overlay ============================== */
+function openMeta() {
+  state = 'meta';
+  hideOverlays();
+  renderMetaList();
+  metaEl.classList.remove('hidden');
+}
+function closeMeta() { metaEl.classList.add('hidden'); showMenu(); }
+
+/* ============================== Wayside events (random between rounds) ============================== */
+let eventChoices = [];
+function openEvent() {
+  state = 'event';
+  eventChoices = [...EVENTS].sort(() => Math.random() - 0.5).slice(0, 3);
+  const el = $('eventCards');
+  el.innerHTML = '';
+  eventChoices.forEach((e, i) => {
+    const card = document.createElement('div');
+    card.className = 'event-card';
+    card.style.animationDelay = (i * 0.06) + 's';
+    card.innerHTML = `<div class="pup-icon">${e.icon}</div><div class="pup-name">${e.name}</div><div class="pup-desc">${e.desc}</div>${e.cost ? `<div class="shop-price" style="margin-top:8px;">${e.cost} 🪙</div>` : ''}`;
+    card.addEventListener('click', () => pickEvent(e.id));
+    el.appendChild(card);
+  });
+  hideOverlays();
+  eventEl.classList.remove('hidden');
+}
+function pickEvent(id) {
+  const e = EVENTS.find(x => x.id === id);
+  const res = e ? e.fn({ gold: run.gold }) : null;
+  if (res == null) { msgFlash('NOT ENOUGH GOLD'); sfxLose(); return; }   // stay — pick another card or decline
+  msgFlash(res);
+  sfxPick();
+  eventEl.classList.add('hidden');
+  run.round++;
+  showIntro();
+}
+function skipEvent() {
+  eventEl.classList.add('hidden');
+  run.round++;
+  showIntro();
+}
+
+function resetPaddles() { paddleL.y = paddleR.y = paddleR2.y = H / 2; paddleL.vy = paddleR.vy = 0; }
+
+function setMsg(m) { msg = m; msgT = 1.3; }
+
+/* Floating proc indicators (small pixel flashes when abilities fire). */
+function procFlash(text, x, y, color) {
+  procs.push({ text, x: clamp(x, 30, W - 30), y: clamp(y, 24, H - 10), color, t: 0.9, max: 0.9 });
+  if (procs.length > 14) procs.shift();
+}
+
+/* ============================== Physics ============================== */
+function playerPaddleH() {
+  // Titan Grip synergy: Colossus + Overdrive Paddles stack harder on the length bonus.
+  const tg = synergyActive(SYNERGIES.find(s => s.id === 'syn_titan'));
+  const colossus = (1 + dimStacks(stacks('colossus'), 0.4)) * (tg ? 1.3 : 1);
+  const hex = hexActive > 0 ? 0.7 : 1;
+  // Coil Springs: hold still and the paddle stretches (decays the moment you move).
+  const coil = 0.22 * dimStacks(stacksU('shop_len'), 1) * Math.min(1, stillT / 3);
+  // Length stacking is DIMINISHING (not linear) and hard-capped: no build may wall off the
+  // whole court, so the CPU always has a reachable angle on you.
+  const len = PADDLE_H * (1 + dimStacks(stacks('paddle_plus'), 0.25) + coil) + vampGrow;
+  return clamp(len * colossus * hex, 20, H * 0.55);
+}
+function cpuPaddleH() {
+  const shell = curAI && curAI.ability === 'shell' && shellOpen > 0 ? 0.5 : 1;
+  const sear = searT > 0 ? Math.max(0.4, 1 - 0.03 * stacksU('shop_pwr')) : 1;   // Searing Edge burn (floored: never a negative paddle)
+  // Cap by court height so oversized paddles (Wall/Tortoise) never wall off the whole arena.
+  return clamp(((curAI ? curAI.paddleH : PADDLE_H) - cpuShrink) * shell * sear, 44, H * 0.62);
+}
+function defenderH() { return playerPaddleH() * 0.45; }
+
+function stepBalls(dt) {
+  for (const b of balls) {
+    if (b.dead) continue;
+    const speed = Math.hypot(b.vx, b.vy) || 1;
+    let remaining = dt;
+    let scored = false;
+    while (remaining > 1e-6 && !scored) {
+      const step = Math.min(remaining, BALL_R / speed);
+      remaining -= step;
+      scored = moveBall(b, step);
+    }
+    if (scored) return;
+  }
+  balls = balls.filter(x => !x.dead);
+}
+
+function moveBall(b, dt) {
+  // Holo clones are decoys: they fly and bounce visually but never touch paddles or goals.
+  if (b.clone) {
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.y - BALL_R <= 0) { b.y = BALL_R; b.vy = Math.abs(b.vy); }
+    else if (b.y + BALL_R >= H) { b.y = H - BALL_R; b.vy = -Math.abs(b.vy); }
+    if (b.x <= BALL_R) { b.x = BALL_R; b.vx = Math.abs(b.vx); }
+    else if (b.x >= W - BALL_R) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx); }
+    return false;
+  }
+  b.x += b.vx * dt;
+  b.y += b.vy * dt;
+
+  if (b.y - BALL_R <= 0) { b.y = BALL_R; b.vy = Math.abs(b.vy); onWall(b); if (curCond === 'bouncy') b.spin = clamp(b.spin + (Math.random() < 0.5 ? 1 : -1) * 1.4 * hazardScale, -MAX_SPIN, MAX_SPIN); }
+  else if (b.y + BALL_R >= H) { b.y = H - BALL_R; b.vy = -Math.abs(b.vy); onWall(b); if (curCond === 'bouncy') b.spin = clamp(b.spin + (Math.random() < 0.5 ? 1 : -1) * 1.4 * hazardScale, -MAX_SPIN, MAX_SPIN); }
+
+  // Drifting obstacle blocks (Blockades hazard): bounce the ball off each brick wall.
+  for (const o of obstacles) {
+    const cx = clamp(b.x, o.x - o.w / 2, o.x + o.w / 2);
+    const cy = clamp(b.y, o.y - o.h / 2, o.y + o.h / 2);
+    const dx = b.x - cx, dy = b.y - cy;
+    if (dx * dx + dy * dy <= BALL_R * BALL_R) {
+      // Reflect the dominant axis and nudge out of the block.
+      if (Math.abs(dx) > Math.abs(dy)) { b.vx = Math.sign(b.vx || 1) * Math.abs(b.vx); b.x = cx + Math.sign(b.x - cx || 1) * (BALL_R + 1); }
+      else { b.vy = Math.sign(b.vy || 1) * Math.abs(b.vy); b.y = cy + Math.sign(b.y - cy || 1) * (BALL_R + 1); }
+      spawnBurst(b.x, b.y, '#c084fc', 8);
+      sfxWall();
+      if (curCond === 'obstacles') b.spin = clamp(b.spin + (Math.random() < 0.5 ? 1 : -1) * 0.8, -MAX_SPIN, MAX_SPIN);
+    }
+  }
+
+  // Magnus effect: spin bends the trajectory in flight (speed preserved). The angle guard is
+  // generous (well above the widest possible hit, so Wide Arc shots are never flattened).
+  if (b.spin) {
+    b.vy += b.spin * SPIN_CURVE * (1 + 0.25 * stacksU('shop_curve')) * dt;
+    const dir = b.vx >= 0 ? 1 : -1;
+    const ang = clamp(Math.atan2(b.vy, Math.abs(b.vx)), -MAX_TILT * 1.5, MAX_TILT * 1.5);
+    b.vx = dir * Math.cos(ang) * b.speed;
+    b.vy = Math.sin(ang) * b.speed;
+  }
+
+  if (b.vx < 0) {
+    if (hitPaddle(b, paddleL, cpuPaddleH())) {
+      if (ghostCharges > 0 && ghostCd <= 0) {
+        ghostCharges--;
+        ghostCd = 1.5;
+        b.x = paddleL.x - PADDLE_W / 2 - BALL_R - 0.5;
+        sfxGhost(); spawnBurst(b.x, b.y, '#c084fc', 12); msgFlash('PHASED!');
+      } else if (curAI.ability === 'phantom' && phaseActive) {
+        b.x = paddleL.x - PADDLE_W / 2 - BALL_R - 0.5;
+      } else cpuHitBall(b);
+    } else if (curAI && curAI.ability === 'echo' && echoActive > 0 && hitPaddle(b, { x: paddleL.x, y: echoY }, cpuPaddleH())) {
+      echoActive = 0;   // the afterimage fades after one return
+      echoReturnBall(b);
+    }
+  } else {
+    if (hitPaddle(b, paddleR, playerPaddleH())) playerHitBall(b, false);
+    else if (has('second_paddle') && hitPaddle(b, paddleR2, defenderH())) playerHitBall(b, true);
+  }
+
+  // The Bastion's energy wall catches ONE ball that slips past its paddle (pure-defense safety net).
+  if (b.vx < 0 && curAI && curAI.ability === 'bastion' && bastionActive > 0 && b.x < paddleL.x - PADDLE_W - 6) {
+    b.x = paddleL.x + PADDLE_W / 2 + BALL_R + 0.5;
+    b.vx = Math.abs(b.vx);
+    bastionActive = 0;
+    procFlash('BASTION!', paddleL.x, paddleL.y, '#9ad0ff');
+    spawnBurst(b.x, b.y, '#9ad0ff', 16);
+    shake = Math.min(shake + 5, 12);
+    sfxShield();
+    return false;
+  }
+
+  if (b.x < -60) { point('p'); return true; }
+  else if (b.x > W + 60) {
+    if (shieldsLeft > 0) {
+      // Fortuna Aegis synergy: 50% chance the block doesn't consume the shield.
+      const free = synergyActive(SYNERGIES.find(s => s.id === 'syn_shield')) && Math.random() < 0.5;
+      if (!free) shieldsLeft--;
+      b.x = W - BALL_R - 2;
+      b.vx = -Math.abs(b.vx);
+      cpuFury++;
+      sfxShield();
+      msgFlash('SHIELD!');
+      spawnBurst(b.x, b.y, '#7dd3fc', 20);
+      shake = Math.min(shake + 4, 10);
+      return false;
+    }
+    const pierce = 1 - Math.min(0.75, cpuFury * 0.15);   // Fury erodes chance-denial: each denied point makes the next goal likelier
+    if (has('void') && Math.random() < bern(0.20 * pierce, Math.min(stacks('void'), 3))) {   // capped at 3 effective stacks (48.8%) — defense has a ceiling
+      cpuFury++;
+      msgFlash('VOID!');
+      sfxGhost();
+      spawnBurst(b.x, b.y, '#a78bfa', 18);
+      // Echo Void synergy: erased goals refund a ghost-ball pass charge.
+      if (synergyActive(SYNERGIES.find(s => s.id === 'syn_ghost'))) { ghostCharges = Math.min(ghostCharges + 1, 4); }
+      serve(-1);
+      resetPaddles();
+      return true;
+    }
+    // Evasion Coils: a small chance a goal against you is simply nullified (ball returns to play).
+    if (stacksU('shop_evade') > 0 && Math.random() < bern(0.08 * pierce, Math.min(stacksU('shop_evade'), 3))) {   // capped at 3 effective stacks (22%)
+      b.x = W - BALL_R - 2;
+      b.vx = -Math.abs(b.vx);
+      cpuFury++;
+      msgFlash('EVADED!');
+      sfxShield();
+      spawnBurst(b.x, b.y, '#9be9ff', 16);
+      return false;
+    }
+    point('c');
+    return true;
+  }
+  return false;
+}
+
+function hitPaddle(b, p, h) {
+  const nx = clamp(b.x, p.x - PADDLE_W / 2, p.x + PADDLE_W / 2);
+  const ny = clamp(b.y, p.y - h / 2, p.y + h / 2);
+  const dx = b.x - nx, dy = b.y - ny;
+  return dx * dx + dy * dy <= BALL_R * BALL_R;
+}
+
+function playerHitBall(b, fromDefender) {
+  const p = paddleR;
+  const h = playerPaddleH();
+  const offset = clamp((b.y - p.y) / (h / 2), -1, 1);
+  const maxTilt = MAX_TILT * (1 + dimStacks(stacks('wide'), 0.25));
+  let tilt = offset * maxTilt + (Math.random() * 2 - 1) * 0.02;
+  tilt += clamp(p.vy * 0.0011, -0.22, 0.22);
+  tilt = clamp(tilt, -maxTilt, maxTilt);
+  if (!fromDefender) {
+    const batteryBonus = batteryReady ? 40 * dimStacks(stacks('battery'), 1) : 0;
+    // Overcharge synergy: Power Shot + Turbo stack harder on every hit.
+    const over = synergyActive(SYNERGIES.find(s => s.id === 'syn_power'));
+    b.speed = Math.min(b.speed + speedRamp(30, b.speed) + 12 * dimStacks(stacks('power_shot'), 1) + 10 * dimStacks(stacks('turbo'), 1) + batteryBonus + (over ? 14 : 0), BALL_HARD_MAX);   // logarithmic ramp: hot early, tapers near the cap
+    if (batteryReady) { batteryReady = false; batteryT = Math.max(1.5, 8 * Math.pow(0.75, Math.max(0, stacks('battery') - 1))); procFlash('POWER HIT!', b.x, b.y, '#ffd76a'); }   // Battery floors at 1.5s
+    if (has('vamp')) { vampGrow = Math.min(vampGrow + 1.2 * stacks('vamp'), 40); cpuShrink = Math.min(cpuShrink + 1.2 * stacks('vamp'), 48); }
+    // Deep Freeze synergy: chill lasts 2s longer.
+    if (has('frost')) { frostT = synergyActive(SYNERGIES.find(s => s.id === 'syn_frost')) ? 3 : 1.5; procFlash('CHILL!', paddleL.x, paddleL.y, '#7dd3fc'); }
+    // Colossus Frame tremor: your hits slow the CPU for a moment.
+    if (has('colossus')) { tremorT = 1.5; procFlash('TREMOR!', paddleL.x, paddleL.y, '#b0b7c9'); }
+    // Searing Edge: your hits burn the CPU paddle smaller for 3s.
+    if (stacksU('shop_pwr') > 0) { searT = 3; procFlash('SEAR!', paddleL.x, paddleL.y, '#fb923c'); }
+    // Shockwave: hard hits stun the CPU for a blink.
+    if (has('bash') && b.speed > 600) { empLockT = Math.max(empLockT, 0.5); procFlash('SHOCKWAVE!', paddleL.x, paddleL.y, '#ff9f43'); }
+  }
+  b.vx = -Math.cos(tilt) * b.speed;
+  b.vy = Math.sin(tilt) * b.speed;
+  b.x = p.x - PADDLE_W / 2 - BALL_R - 0.5;
+  // Blood Mirror synergy: the backup defender's hits also drain the CPU paddle (fires right here,
+  // on the actual hit — checked in the playerUpdate pass the ball is already reflected away).
+  if (fromDefender && synergyActive(SYNERGIES.find(s => s.id === 'syn_vamp'))) {
+    vampGrow = Math.min(vampGrow + 1.2 * stacks('vamp'), 40);
+    cpuShrink = Math.min(cpuShrink + 1.2 * stacks('vamp'), 48);
+  }
+  // Table-tennis spin: swipe your paddle as you strike and the ball leaves with spin that
+  // curves it in flight. Stronger and more visible than before; Spin Mastery upgrades boost it.
+  b.spin = fromDefender ? 0 : clamp(p.vy * 0.006 * (1 + dimStacks(stacksU('shop_spin'), 0.3)), -MAX_SPIN, MAX_SPIN);
+  // Curve Jolt: every hit leaves the ball with a burst of spin.
+  if (!fromDefender && has('magnus')) { b.spin = clamp(b.spin + (Math.random() < 0.5 ? 1 : -1) * 1.3, -MAX_SPIN, MAX_SPIN); procFlash('CURVE JOLT!', b.x, b.y, '#c4b5fd'); }
+  if (!fromDefender && Math.abs(p.vy) > 380) procFlash(p.vy < 0 ? 'TOPSPIN!' : 'BACKSPIN!', b.x, b.y, '#8ef0ff');
+  // Split AFTER reflecting so clones inherit the outgoing direction (no cascade).
+  if (!fromDefender && has('multiball')) { let n = stacks('multiball'); while (n-- > 0) splitBall(b); }
+  // Chain Bolt: fire a super-fast straight bolt toward the CPU (Bolt Barrage synergy boosts the chance)
+  const boltChance = Math.min(0.95, (has('bolt') ? bern(0.20, stacks('bolt')) : 0) + (synergyActive(SYNERGIES.find(s => s.id === 'syn_bolt')) ? 0.35 : 0));   // never >100%
+  if (!fromDefender && boltChance > 0 && Math.random() < boltChance && balls.length < MAX_BALLS) {
+    const bs = Math.min(b.speed + 160, BALL_HARD_MAX);
+    const nb = { x: b.x, y: clamp(b.y, BALL_R, H - BALL_R), speed: bs, vx: -bs, vy: 0, spin: 0, bolt: true };
+    balls.push(nb);
+    msgFlash('CHAIN BOLT!');
+    spawnBurst(b.x, b.y, '#ffd76a', 14);
+  }
+  spawnBurst(b.x, b.y, COLORS.player, 10);
+  shake = Math.min(shake + 3, 8);
+  sfxPaddle(b.speed);
+  ballHitFx(b, true);
+}
+
+function splitBall(b) {
+  if (balls.length >= MAX_BALLS) return;
+  // Tighter split angles and slightly slower clones: multiball is still hard to receive,
+  // but a single CPU paddle can always physically cover the spread (never a free point).
+  const a = Math.atan2(b.vy, b.vx) + (Math.random() * 2 - 1) * 0.3;
+  const sp = b.speed * 0.9;
+  const nb = { x: b.x, y: clamp(b.y, BALL_R, H - BALL_R), speed: sp, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, spin: b.spin };
+  balls.push(nb);
+}
+
+function cpuHitBall(b) {
+  const a = curAI;
+  const h = cpuPaddleH();
+  const offset = clamp((b.y - paddleL.y) / (h / 2), -1, 1);
+  let tilt = offset * MAX_TILT + (Math.random() * 2 - 1) * 0.02;
+  if (a.ability === 'diviner') tilt += clamp(paddleR.vy * 0.0013, -0.28, 0.28);
+  if (a.ability === 'mirror') tilt *= 1.6;
+  // Aimed returns: AIs with high `aim` try to hit the open side of the court.
+  if (a.aim > 0 && !b.bolt) {
+    const openY = paddleR.y > H / 2 ? H * 0.15 : H * 0.85;
+    const aimed = cpuAimTilt(b, openY);
+    tilt = lerp(tilt, aimed, a.aim * 0.85);
+  }
+  tilt = clamp(tilt, -1.25, 1.25);
+  const parryHit = a.ability === 'parry' && parryActive > 0;
+  const powerShot = chargeActive > 0;
+  let accel = a.ability === 'smasher' ? 36 : (parryHit ? 60 : 22);
+  if (rageActive > 0) accel += 30;      // Ogre's rage: heavy hits
+  if (stormActive > 0) accel += 50;     // Archon's storm: electrified returns
+  let spin = 0;
+  if (powerShot) {
+    accel += 110;
+    spin = (Math.random() < 0.5 ? 1 : -1) * 2.6;
+    chargeActive = 0; chargeT = a.charge || 10;
+    procFlash('POWER SHOT!', b.x, b.y, '#ffd76a');
+    spawnBurst(b.x, b.y, '#ffd76a', 26);
+    shake = Math.min(shake + 10, 18);
+    sfxGhost();
+  } else if (a.ability === 'mirror') {
+    spin = (Math.random() < 0.5 ? 1 : -1) * (1.4 + Math.abs(tilt) * 1.6);   // heavy unpredictable curve
+  } else if (a.ability === 'diviner') {
+    spin = clamp(-paddleR.vy * 0.006, -2.6, 2.6);   // spins against your movement
+  } else if (a.ability === 'smasher') {
+    spin = (Math.random() < 0.5 ? 1 : -1) * 1.0;
+  } else if (rageActive > 0) {
+    spin = (Math.random() < 0.5 ? 1 : -1) * 1.2;   // rough, unpredictable spin
+  }
+  if (parryHit) { parryActive = 0; procFlash('PARRY!', b.x, b.y, '#93c5fd'); }
+  // Table-tennis spin for the CPU too: swipe its paddle and the return carries spin.
+  spin += clamp(paddleL.vy * 0.004, -1.4, 1.4);
+  b.speed = Math.min(b.speed + speedRamp(accel + 8, b.speed), BALL_HARD_MAX);   // log ramp keeps CPU returns fair
+  b.vx = Math.cos(tilt) * b.speed;
+  b.vy = Math.sin(tilt) * b.speed;
+  b.x = paddleL.x + PADDLE_W / 2 + BALL_R + 0.5;
+  b.spin = clamp(spin, -MAX_SPIN, MAX_SPIN);
+  spawnBurst(b.x, b.y, COLORS.cpu, 10);
+  shake = Math.min(shake + 3, 8);
+  sfxPaddle(b.speed);
+  ballHitFx(b, false);
+}
+
+/* Compute the tilt that lands the ball near targetY at the player's paddle plane, folding wall
+   bounces. Uses the slope tan(tilt) = dy/dx which is speed-independent and exact for any
+   departure speed, so aimed returns reach the open corner even on hard smashes. */
+function cpuAimTilt(b, targetY) {
+  const travel = Math.max(1, paddleR.x - b.x);
+  const R = H - 2 * BALL_R;
+  let best = 0, bestErr = Infinity;
+  for (let k = -4; k <= 4; k++) {
+    const u1 = targetY + k * 2 * R;
+    const u2 = 2 * BALL_R + 2 * R - targetY + k * 2 * R;
+    for (const u of [u1, u2]) {
+      const slope = (u - b.y) / travel;
+      if (Math.abs(slope) < bestErr) { bestErr = Math.abs(slope); best = slope; }
+    }
+  }
+  return clamp(Math.atan(best), -1.25, 1.25);
+}
+
+/* The Echo's afterimage return: double the angle, no aim assist, mild spin — tricky to read. */
+function echoReturnBall(b) {
+  const h = cpuPaddleH();
+  const offset = clamp((b.y - echoY) / (h / 2), -1, 1);
+  let tilt = clamp(offset * MAX_TILT * 1.4, -1.25, 1.25);
+  b.speed = Math.min(b.speed + 10, BALL_HARD_MAX);
+  b.vx = Math.cos(tilt) * b.speed;
+  b.vy = Math.sin(tilt) * b.speed;
+  b.x = paddleL.x + PADDLE_W / 2 + BALL_R + 0.5;
+  b.spin = clamp((Math.random() < 0.5 ? 1 : -1) * 1.8, -MAX_SPIN, MAX_SPIN);
+  spawnBurst(b.x, b.y, '#7dd3fc', 10);
+  sfxPaddle(b.speed);
+}
+
+function onWall(b) {
+  spawnBurst(b.x, b.y < H / 2 ? 3 : H - 3, COLORS.ball, 4);
+  sfxWall();
+}
+
+/* Fold a value into [lo, hi] as if it reflected off both ends (for prediction). */
+function fold(v, lo, hi) {
+  const range = hi - lo;
+  let t = (v - lo) % (2 * range);
+  if (t < 0) t += 2 * range;
+  return t <= range ? lo + t : hi - (t - range);
+}
+function predictY(x, y, vx, vy, targetX) {
+  if (vx === 0) return y;
+  const t = (targetX - x) / vx;
+  if (t <= 0) return y;
+  return fold(y + vy * t, BALL_R, H - BALL_R);
+}
+
+/* ============================== AI ============================== */
+function histAt(t) {
+  if (!hist.length) return null;
+  if (t <= hist[0].t) return hist[0];
+  const l = hist[hist.length - 1];
+  if (t >= l.t) return l;
+  for (let i = hist.length - 2; i >= 0; i--) {
+    const x = hist[i], y = hist[i + 1];
+    if (t >= x.t && t <= y.t) {
+      const f = (t - x.t) / Math.max(1e-6, y.t - x.t);
+      // Return the FULL perceived state (position + velocity) so reaction delay is real:
+      // the CPU reacts to where the ball was, moving with the velocity it had then.
+      return { x: x.x + (y.x - x.x) * f, y: x.y + (y.y - x.y) * f, vx: x.vx, vy: x.vy };
+    }
+  }
+  return hist[0];
+}
+
+function updateAbilityTimers(dt) {
+  const a = curAI;
+  // Charmed Round: the CPU's special ability is disabled for the whole round.
+  const abilityOn = !charmed;
+  // Champion's Aura: CPU abilities trigger slower
+  const cd = dt * (1 - Math.min(0.7, 0.4 * dimStacks(stacks('champion'), 1)));  // never negative at high stacks
+  if (abilityOn && a.ability === 'surge') {
+    surgeT -= cd;
+    if (surgeT <= 0) { surgeT = 6; surgeActive = 1.5; }
+    if (surgeActive > 0) surgeActive -= dt;
+  }
+  if (abilityOn && a.ability === 'phantom') {
+    if (phaseActive) {
+      phaseDur -= dt;
+      if (phaseDur <= 0) { phaseActive = false; phaseT = 5; }
+    } else {
+      phaseT -= cd;
+      if (phaseT <= 0) { phaseActive = true; phaseDur = 1.2; }
+    }
+  }
+  if (abilityOn && a.ability === 'weaver') {
+    weaverT -= cd;
+    if (weaverT <= 0) {
+      weaverT = 8;
+      let spawned = 0;
+      while (spawned < 2 && balls.length < MAX_BALLS && balls.length > 0) {
+        const src = balls[Math.floor(Math.random() * balls.length)];
+        const jitter = (Math.random() * 2 - 1) * 0.3;
+        const ang = Math.atan2(src.vy, src.vx) + jitter;
+        balls.push({ x: clamp(src.x, BALL_R, W - BALL_R), y: clamp(src.y, BALL_R, H - BALL_R), speed: src.speed, vx: Math.cos(ang) * src.speed, vy: Math.sin(ang) * src.speed, spin: (Math.random() < 0.5 ? 1 : -1) * 1.2 });
+        spawned++;
+      }
+      if (spawned > 0) {
+        msgFlash('SWARM ×' + spawned + '!');
+        procFlash('SWARM!', W / 2, H / 2, '#f0abfc');
+        spawnBurst(W / 2, H / 2, '#f0abfc', 16);
+      }
+    }
+  }
+  if (abilityOn && a.ability === 'gamble') {
+    gambleT -= cd;
+    if (gambleT <= 0) {
+      gambleT = 4;
+      if (Math.random() < 0.5) {
+        // Teleport straight onto the predicted ball position.
+        let tb = null, bt = Infinity;
+        for (const b of balls) {
+          if (b.vx < 0) {
+            const t = (b.x - paddleL.x) / -b.vx;
+            if (t >= 0 && t < bt) { bt = t; tb = b; }
+          }
+        }
+        if (tb) {
+          const targetY = a.predict ? predictY(tb.x, tb.y, tb.vx, tb.vy, paddleL.x) : tb.y;
+          paddleL.y = clamp(targetY, cpuPaddleH() / 2, H - cpuPaddleH() / 2);
+          procFlash('GAMBLE!', paddleL.x, paddleL.y, '#fbbf24');
+          spawnBurst(paddleL.x, paddleL.y, '#fbbf24', 18);
+        }
+      } else {
+        gambleFreeze = 0.7; // frozen in place for a moment
+        procFlash('BLUFF!', paddleL.x, paddleL.y, '#94a3b8');
+      }
+    }
+    if (gambleFreeze > 0) gambleFreeze -= dt;
+  }
+  if (abilityOn && a.ability === 'parry') {
+    parryT -= cd;
+    if (parryT <= 0) { parryT = 6; parryActive = 1.2; procFlash('PARRY!', paddleL.x, paddleL.y, '#93c5fd'); spawnBurst(paddleL.x, paddleL.y, '#93c5fd', 12); }
+    if (parryActive > 0) parryActive -= dt;
+  }
+  if (abilityOn && a.ability === 'lure') {
+    lureT -= cd;
+    if (lureT <= 0) { lureT = 7; lureActive = 1.8; mouseActive = false; procFlash('LURED!', paddleR.x, paddleR.y, '#f9a8d4'); sfxGhost(); }
+    if (lureActive > 0) lureActive -= dt;
+  }
+  if (abilityOn && a.ability === 'shell') {
+    shellT -= cd;
+    if (shellT <= 0) { shellT = 5; shellOpen = 1.0; procFlash('SHELL!', paddleL.x, paddleL.y, '#86efac'); }
+    if (shellOpen > 0) shellOpen -= dt;
+  }
+  if (abilityOn && a.ability === 'quake') {
+    quakeT -= cd;
+    if (quakeT <= 0) {
+      quakeT = 7;
+      quakeActive = 1.0;
+      shake = Math.min(shake + 16, 22);
+      msgFlash('QUAKE!');
+      sfxLose();
+      for (const b of balls) {
+        b.speed = Math.min(b.speed + 40, BALL_HARD_MAX);
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        b.vx = b.vx / sp * b.speed;
+        b.vy = b.vy / sp * b.speed;
+        b.spin = clamp(b.spin + (Math.random() < 0.5 ? 1 : -1) * 1.8, -MAX_SPIN, MAX_SPIN);
+      }
+    }
+    if (quakeActive > 0) quakeActive -= dt;
+  }
+  if (abilityOn && a.ability === 'hex') {
+    hexT -= cd;
+    if (hexT <= 0) {
+      hexT = 6;
+      hexActive = 2.5;
+      msgFlash('HEXED!');
+      sfxGhost();
+    }
+    if (hexActive > 0) hexActive -= dt;
+  }
+  if (abilityOn && a.ability === 'bastion') {
+    bastionT -= cd;
+    if (bastionT <= 0) { bastionT = 6; bastionActive = 1.5; procFlash('BASTION!', paddleL.x, paddleL.y, '#9ad0ff'); spawnBurst(paddleL.x, paddleL.y, '#9ad0ff', 12); }
+    if (bastionActive > 0) bastionActive -= dt;
+  }
+  if (abilityOn && a.ability === 'echo') {
+    echoT -= cd;
+    if (echoT <= 0) { echoT = 6; echoActive = 2.0; echoY = paddleL.y; procFlash('ECHO!', paddleL.x, paddleL.y, '#7dd3fc'); spawnBurst(paddleL.x, paddleL.y, '#7dd3fc', 12); }
+    if (echoActive > 0) echoActive -= dt;
+  }
+  if (abilityOn && a.ability === 'gust') {
+    gustT -= cd;
+    if (gustT <= 0) { gustT = 7; gustActive = 2.5; msgFlash('GUST!'); sfxGhost(); }
+    if (gustActive > 0) gustActive -= dt;
+  }
+  if (abilityOn && a.ability === 'rage') {
+    rageT -= cd;
+    if (rageT <= 0) { rageT = 7; rageActive = 3.0; msgFlash('RAGE!'); procFlash('RAGE!', paddleL.x, paddleL.y, '#f87171'); sfxLose(); }
+    if (rageActive > 0) rageActive -= dt;
+  }
+  if (abilityOn && a.ability === 'storm') {
+    stormT -= cd;
+    if (stormT <= 0) {
+      stormT = 8; stormActive = 2.0;
+      shake = Math.min(shake + 14, 20);
+      msgFlash('STORM!');
+      sfxLose();
+      for (const b of balls) {
+        b.speed = Math.min(b.speed + 30, BALL_HARD_MAX);
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        b.vx = b.vx / sp * b.speed; b.vy = b.vy / sp * b.speed;
+        b.spin = clamp(b.spin + (Math.random() < 0.5 ? 1 : -1) * 1.4, -MAX_SPIN, MAX_SPIN);
+      }
+    }
+    if (stormActive > 0) stormActive -= dt;
+  }
+  if (abilityOn && a.ability === 'tide') {
+    tideT -= cd;
+    if (tideT <= 0) {
+      tideT = 9; tideActive = 3.0; tideDir = -tideDir;
+      msgFlash('TIDE!');
+      shake = Math.min(shake + 10, 16);
+      sfxGhost();
+    }
+    if (tideActive > 0) tideActive -= dt;
+  }
+  // Boss power-shot charge: Titan/Warlock telegraph a charged return.
+  if (abilityOn && a.charge) {
+    chargeT -= cd;
+    if (chargeT <= 0) {
+      chargeT = a.charge;
+      chargeActive = 2.0;
+      procFlash('CHARGING!', paddleL.x, paddleL.y - cpuPaddleH() / 2 - 16, '#ffd76a');
+      spawnBurst(paddleL.x, paddleL.y, '#ffd76a', 12);
+      sfxShield();
+    }
+    if (chargeActive > 0) chargeActive -= dt;
+  }
+  if (frozenLeft > 0) frozenLeft = Math.max(0, frozenLeft - dt);
+  if (frostT > 0) frostT = Math.max(0, frostT - dt);
+}
+
+function cpuUpdate(dt) {
+  const a = curAI;
+  // Comeback drive + Charmed focus are used by both the aim-error and movement blocks below.
+  const comeback = (scores.c + 2 <= scores.p) ? 1.18 : 1;   // trailing by 2+: plays harder
+  const focus = charmed ? 1.1 : 1;                          // ability silenced: raw fundamentals
+  const prev = paddleL.y;
+
+  const tb0 = balls.length ? balls[0] : null;
+  hist.push({ x: tb0 ? tb0.x : W / 2, y: tb0 ? tb0.y : H / 2, vx: tb0 ? tb0.vx : 0, vy: tb0 ? tb0.vy : 0, t: tNow });
+  if (hist.length > 240) hist.shift();
+
+  // Track the incoming ball that demands the most: soonest to arrive AND farthest from
+  // the paddle's current spot. This lets the CPU cover multishot serves instead of
+  // fixating on the first ball it sees.
+  let targetBall = null, bestScore = -Infinity;
+  for (const b of balls) {
+    if (b.vx < 0) {
+      const t = (b.x - paddleL.x) / Math.max(-b.vx, 1);
+      if (t < 0) continue;
+      const yAt = predictY(b.x, b.y, b.vx, b.vy, paddleL.x);
+      const need = Math.abs(yAt - paddleL.y) / Math.max(t, 0.05);   // required speed
+      const score = need * (1 / (0.25 + t));                        // urgency: soon + far
+      if (score > bestScore) { bestScore = score; targetBall = b; }
+    }
+  }
+
+  let tx;
+  if (targetBall) {
+    // True reaction delay: perceive the ball as it was `react` seconds ago (with its THEN
+    // velocity), so a sudden direction change costs the CPU that window to re-read.
+    // Serve assist: the CPU watches the serve launch (it's telegraphed from center), so it
+    // reacts almost instantly during the first moments — serves are always receivable.
+    const react = (tNow - serveLaunchT) < 0.5 ? Math.min(a.react, 0.10) : a.react;
+    const look = balls.length === 1
+      ? (histAt(tNow - react) || { x: targetBall.x, y: targetBall.y, vx: targetBall.vx, vy: targetBall.vy })
+      : { x: targetBall.x, y: targetBall.y, vx: targetBall.vx, vy: targetBall.vy };
+    tx = a.predict ? predictY(look.x, look.y, look.vx, look.vy, paddleL.x) : look.y;
+  } else {
+    // Nothing incoming: defense-minded CPUs hold the live ball line (anticipation); others roam.
+    const b0 = balls[0];
+    tx = (a.personality === 'defense' && b0 && b0.vx > 0)
+      ? b0.y
+      : H / 2 + Math.sin(tNow * 0.6) * 24;
+  }
+
+  // Re-roll the target often so the CPU tracks fresh (responsive). Aim error shrinks as
+  // the ball gets close (concentration), giving accurate last-second reads.
+  cpuRerollT -= dt;
+  if (cpuRerollT <= 0) {
+    const distFactor = targetBall ? clamp((targetBall.x - paddleL.x) / 500, 0.25, 1) : 1;
+    // Deep Freeze synergy: a chilled CPU also aims worse while the freezer is active.
+    const cloneDist = balls.filter(x => x.clone).length;   // holo decoys distract the CPU's aim
+    const err = a.error * distFactor * (frozenLeft > 0 && synergyActive(SYNERGIES.find(s => s.id === 'syn_frost')) ? 1.5 : 1) * (glitchActiveT > 0 ? 3 : 1) * (comeback ? 0.8 : 1) * (1 - Math.min(0.55, cpuFury * 0.07)) * (1 + 0.16 * cloneDist);   // comeback + fury = sharper aim; holo clones = fuzzier aim
+    cpuTarget = tx + (Math.random() * 2 - 1) * err;
+    cpuRerollT = 0.10 + Math.random() * 0.10;
+  }
+
+  // Slows stack multiplicatively — floor the SLOW product so the CPU always keeps ~35% of its
+  // speed: it can be pressured hard, but never frozen into a statue it cannot play out of.
+  let slowMul = (frozenLeft > 0 ? 0.6 : 1) * (frostT > 0 ? 0.8 : 1) * (gambleFreeze > 0 ? 0.15 : 1) * (tremorT > 0 ? 0.85 : 1) * (empLockT > 0 ? 0.05 : 1);
+  slowMul = Math.max(0.35, slowMul);
+  // Fury: every denied point sharpens the CPU (permanent for the match, capped) — the more
+  // defense you stack, the harder the CPU pushes, so no build can lock it out forever.
+  const furyMul = 1 + Math.min(0.6, cpuFury * 0.10);
+  const speedMul = slowMul * (surgeActive > 0 ? 2 : 1) * (a.ability === 'phantom' && phaseActive ? 2 : 1) * (rageActive > 0 ? 2.2 : 1) * comeback * focus * furyMul;   // Phantom ghost-dash / Ogre rage / Colossus tremor / EMP lock
+  const dy = cpuTarget - paddleL.y;
+  if (Math.abs(dy) > 4) {
+    const dir = Math.sign(dy);
+    // Close-range commit: when the ball is almost on the paddle the CPU focuses hard and
+    // moves at full clip (no easing), so it actively snatches fast shots.
+    const near = targetBall && (targetBall.x - paddleL.x) < 150;
+    const ease = near ? 1.35 : Math.min(1, Math.abs(dy) / 90);
+    paddleL.y += dir * a.speed * speedMul * ease * dt;
+  }
+  paddleL.y = clamp(paddleL.y, cpuPaddleH() / 2, H - cpuPaddleH() / 2);
+  paddleL.vy = (paddleL.y - prev) / Math.max(dt, 1e-4);
+}
+
+/* ============================== Player ============================== */
+function playerUpdate(dt) {
+  const a = curAI;
+  const colossusSpeed = 1 + dimStacks(stacks('colossus'), 0.3);
+  const hexSpeed = hexActive > 0 ? 0.7 : 1;
+  // Nitrous: +20% paddle speed while the ball is hot (over 700 px/s).
+  const fastBall = balls.some(b => Math.hypot(b.vx, b.vy) > 700);
+  const speedFactor = (a && a.ability === 'glacier' ? 0.5 : 1) * (1 + dimStacks(stacks('reflex'), 0.25) + (fastBall ? dimStacks(stacksU('shop_spd'), 0.2) : 0)) * colossusSpeed * hexSpeed;
+  const invert = lureActive > 0 ? -1 : 1;   // Siren's hypnosis flips your controls
+  const prev = paddleR.y;
+  let moving = false;
+  const slowF = playerSlowT > 0 ? 0.7 : 1;   // Chill arena ball: the receiver's paddle slows briefly
+  if (curCond === 'slick') {
+    // Slick Ice hazard: momentum carries — accelerate instead of snapping to input.
+    const target = (keys.up || keys.w ? -1 : 0) + (keys.down || keys.s ? 1 : 0);
+    if (target !== 0) slickV = clamp(slickV + target * PLAYER_SPEED * 1.5 * slowF * dt, -PLAYER_SPEED, PLAYER_SPEED);
+    else slickV *= Math.pow(0.25, dt);
+    if (Math.abs(slickV) > 4) { paddleR.y += slickV * speedFactor * dt * invert; moving = true; }
+    else if (mouseActive) { paddleR.y += (mouseY - paddleR.y) * Math.min(1, dt * 16 * speedFactor) * invert; moving = true; }
+  } else {
+    if (keys.up || keys.w) { paddleR.y -= PLAYER_SPEED * speedFactor * slowF * dt * invert; moving = true; }
+    if (keys.down || keys.s) { paddleR.y += PLAYER_SPEED * speedFactor * slowF * dt * invert; moving = true; }
+    if (moving) { mouseActive = false; }
+    else if (mouseActive) { paddleR.y += (mouseY - paddleR.y) * Math.min(1, dt * 16 * speedFactor * slowF) * invert; moving = true; }
+  }
+  // Coil Springs: standing still charges the stretch, moving resets it.
+  if (moving) stillT = 0; else stillT = Math.min(stillT + dt, 4);
+  paddleR.y = clamp(paddleR.y, playerPaddleH() / 2, H - playerPaddleH() / 2);
+  paddleR.vy = (paddleR.y - prev) / Math.max(dt, 1e-4);
+
+  // Curve control: hold Shift and steer YOUR outgoing shots (vx < 0 = moving left, away from your paddle).
+  if (has('curve') && keys.shift) {
+    let steer = 0;
+    if (keys.up) steer -= 1;
+    if (keys.down) steer += 1;
+    if (steer !== 0) {
+      for (const b of balls) {
+        if (b.vx < 0) {
+          b.vy += steer * 1600 * dt;
+          const ang = clamp(Math.atan2(b.vy, -b.vx), -CURVE_CAP, CURVE_CAP);
+          b.vx = -Math.cos(ang) * b.speed;
+          b.vy = Math.sin(ang) * b.speed;
+          b.spin = steer;
+        }
+      }
+    }
+  }
+  // decay spin (slow fade so Magnus curves carry across the court — more visible now)
+  for (const b of balls) { if (b.spin) b.spin *= Math.pow(0.45, dt); }
+
+  // Seeker Rounds: outgoing shots bend gently toward the CPU paddle. (Gravity Well synergy: 40% stronger)
+  const seekerMult = synergyActive(SYNERGIES.find(s => s.id === 'syn_magseek')) ? 1.4 : 1;
+  if (has('seeker')) {
+    for (const b of balls) {
+      if (b.vx < 0) {
+        const sp = Math.hypot(b.vx, b.vy);
+        b.vy += clamp((paddleL.y - b.y) * 1.6 * dt * dimStacks(stacks('seeker'), 1) * seekerMult, -440 * dt, 440 * dt);
+        const ns = Math.hypot(b.vx, b.vy);
+        if (ns > 0) { b.vx = b.vx / ns * sp; b.vy = b.vy / ns * sp; }
+      }
+    }
+  }
+
+  // Magnet Grip: pull incoming balls toward your paddle (aim assist). (Gravity Well synergy: 40% stronger)
+  if (has('magnet')) {
+    for (const b of balls) {
+      if (b.vx > 0 && Math.abs(b.y - paddleR.y) < 150) {
+        const sp = Math.hypot(b.vx, b.vy);
+        b.vy += clamp((paddleR.y - b.y) * 5 * dt * dimStacks(stacks('magnet'), 1) * seekerMult, -480 * dt, 480 * dt);
+        const ns = Math.hypot(b.vx, b.vy);
+        if (ns > 0) { b.vx = b.vx / ns * sp; b.vy = b.vy / ns * sp; }
+      }
+    }
+  }
+
+  // Backup paddle auto-defender.
+  if (has('second_paddle')) {
+    let target = paddleR.y;
+    let inBall = null, bd = Infinity;
+    for (const b of balls) { if (b.vx > 0) { const d = Math.abs(b.y - paddleR2.y); if (d < bd) { bd = d; inBall = b; } } }
+    if (inBall) target = inBall.y;
+    target = clamp(target, defenderH() / 2, H - defenderH() / 2);
+    const maxStep = PLAYER_SPEED * 0.9 * speedFactor * dt;
+    const dy = clamp(target - paddleR2.y, -maxStep, maxStep);
+    paddleR2.y += dy;
+    paddleR2.y = clamp(paddleR2.y, defenderH() / 2, H - defenderH() / 2);
+  }
+}
+
+/* ============================== Particles / ghosts ============================== */
+function spawnBurst(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 60 + Math.random() * 230;
+    particles.push({ x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: 0.4 + Math.random() * 0.35, max: 0.75, size: 1.5 + Math.random() * 2.2, color });
+  }
+}
+function spawnConfetti() {
+  for (let i = 0; i < 70; i++) {
+    const colors = ['#38e1ff', '#a78bfa', '#ffd76a', '#4ade80', '#ff5d8f'];
+    particles.push({ x: Math.random() * W, y: -10, vx: (Math.random() * 2 - 1) * 140, vy: 60 + Math.random() * 160, life: 1.6 + Math.random(), max: 2.6, size: 2.5 + Math.random() * 3, color: colors[i % colors.length] });
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.985; p.vy *= 0.985;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = ghosts.length - 1; i >= 0; i--) { ghosts[i].life -= dt; if (ghosts[i].life <= 0) ghosts.splice(i, 1); }
+}
+
+function msgFlash(m) { msg = m; msgT = 0.9; }
+
+/* ============================== Update ============================== */
+function update(rawDt) {
+  // Chrono Field: periodically slow time
+  let dt = rawDt;
+  if (state === 'play') {
+    if (has('time_warp')) {
+      // Chrono Tempo synergy: slow-mo fires 30% sooner and lasts longer.
+      const ct = synergyActive(SYNERGIES.find(s => s.id === 'syn_clock'));
+      warpT -= rawDt;
+      if (warpT <= 0) {
+        warpT = Math.max(2, (ct ? 7 : 10) * Math.pow(0.75, Math.max(0, stacks('time_warp') - 1)));   // Chrono floors at 2s
+        warpActive = ct ? 2.6 : 2.0;
+        msgFlash('SLOW-MO!'); sfxShield();
+      }
+      if (warpActive > 0) { warpActive -= rawDt; dt *= ct ? 0.5 : 0.6; }
+    }
+    if (has('doom')) {
+      doomT -= rawDt;
+      if (doomT <= 0) {
+        doomT = 5;
+        // Trick Mirror: the ball closest to the CPU's goal reverses and flies back to you.
+        let rev = null, bd = Infinity;
+        for (const b of balls) { if (b.vx < 0 && b.x < bd) { bd = b.x; rev = b; } }
+        // Fury lets a ball slip past the mirror: enough denied points and a goal finally lands.
+        if (rev && Math.random() >= Math.min(0.7, cpuFury * 0.14)) {
+          cpuFury++;
+          rev.vx = -rev.vx;
+          spawnBurst(rev.x, rev.y, '#a3e635', 10);
+          procFlash('MIRROR!', rev.x, rev.y, '#a3e635');
+          sfxShield();
+        }
+      }
+    }
+    if (has('emp')) {
+      empT -= rawDt;
+      if (empT <= 0) { empT = 7; empLockT = 0.5; procFlash('EMP!', paddleL.x, paddleL.y, '#38e1ff'); sfxGhost(); spawnBurst(paddleL.x, paddleL.y, '#38e1ff', 12); }
+      if (empLockT > 0) empLockT -= rawDt;
+    }
+    if (has('glitch')) {
+      glitchT -= rawDt;
+      if (glitchT <= 0) { glitchT = 6; glitchActiveT = 2.5; procFlash('GLITCH!', paddleL.x, paddleL.y, '#c084fc'); sfxGhost(); }
+      if (glitchActiveT > 0) glitchActiveT -= rawDt;
+    }
+    if (ghostCd > 0) ghostCd -= dt;
+    if (tremorT > 0) tremorT -= dt;
+    if (searT > 0) searT -= dt;
+    if (has('battery')) {
+      if (!batteryReady) {
+        batteryT -= rawDt;
+        if (batteryT <= 0) { batteryT = Math.max(1.5, 8 * Math.pow(0.75, Math.max(0, stacks('battery') - 1))); batteryReady = true; procFlash('CHARGED!', paddleR.x, paddleR.y - playerPaddleH() / 2 - 16, '#ffd76a'); sfxPick(); }   // Battery floors at 1.5s
+      }
+    }
+  }
+
+  if (state === 'menu') {
+    for (const b of balls) {
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x < BALL_R || b.x > W - BALL_R) b.vx *= -1;
+      if (b.y < BALL_R || b.y > H - BALL_R) b.vy *= -1;
+    }
+  }
+
+  if (state === 'play') {
+    if (serveTimer > 0) {
+      serveTimer -= dt;
+      if (serveTimer <= 0) sfxServe();
+    } else {
+      stepBalls(dt);
+      for (const b of balls) {
+        ghosts.push({ x: b.x, y: b.y, life: 0.28 });
+        // Spin trail: a fading ribbon behind spinning balls so curves are unmistakable.
+        if (Math.abs(b.spin) > 0.1) {
+          b.trail = b.trail || [];
+          b.trail.push({ x: b.x, y: b.y });
+          if (b.trail.length > 14) b.trail.shift();
+        } else if (b.trail && b.trail.length) { b.trail.length = 0; }
+      }
+      if (ghosts.length > 26) ghosts.splice(0, ghosts.length - 26);
+    }
+    // The Zephyr's gust: wobble every ball in flight (speed preserved).
+    if (gustActive > 0) {
+      for (const b of balls) {
+        b.vy += Math.sin(tNow * 8 + b.y * 0.05) * 1600 * dt;
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        b.vx = b.vx / sp * b.speed; b.vy = b.vy / sp * b.speed;
+      }
+    }
+    // The Leviathan's tide: drag every ball vertically (swaps direction each activation).
+    if (tideActive > 0) {
+      for (const b of balls) {
+        b.vy += tideDir * 900 * hazardScale * dt;
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        b.vx = b.vx / sp * b.speed; b.vy = b.vy / sp * b.speed;
+      }
+    }
+    // --- Arena ball type effects (the ball you picked on the intro screen) ---
+    for (const b of balls) {
+      if (b.clone) { b.life -= dt; if (b.life <= 0) b.dead = true; continue; }
+      if (b.mini) { b.life -= dt; if (b.life <= 0) b.dead = true; }
+      const tp = b.type || 'standard';
+      const spd = Math.hypot(b.vx, b.vy) || 1;
+      if (tp === 'wave') {
+        b.waveT += dt * 5.2;
+        b.vy += Math.sin(b.waveT) * 300 * dt;
+        if (spd > 0.01) { const f = b.speed / (Math.hypot(b.vx, b.vy) || 1); b.vx *= f; b.vy *= f; }
+      } else if (tp === 'heavy') {
+        b.vy += 950 * dt;
+        if (spd > 0.01) { const f = b.speed / (Math.hypot(b.vx, b.vy) || 1); b.vx *= f; b.vy *= f; }
+      } else if (tp === 'jitter') {
+        b.jitterT -= dt;
+        if (b.jitterT <= 0) {
+          b.jitterT = 0.9 + Math.random() * 0.9;
+          const a = Math.random() * Math.PI * 2;
+          b.vx += Math.cos(a) * 60; b.vy += Math.sin(a) * 60;
+          if (spd > 0.01) { const f = b.speed / (Math.hypot(b.vx, b.vy) || 1); b.vx *= f; b.vy *= f; }
+        }
+      } else if (tp === 'flash') {
+        b.flashT -= dt;
+        if (b.flashT <= 0) { b.flashT = 3.2 + Math.random() * 0.8; flashBang(b); }
+      } else if (tp === 'holo') {
+        b.holoT -= dt;
+        if (b.holoT <= 0) { b.holoT = 2.2 + Math.random(); spawnHoloClones(b); }
+      } else if (tp === 'trick') {
+        b.trickDist += spd * dt;
+        if (!b.trickFired && b.trickDist > 420) {
+          b.trickFired = true; b.trickT = 0.4;
+          b.spin = clamp(b.spin + (Math.random() < 0.5 ? 1 : -1) * 1.6, -MAX_SPIN, MAX_SPIN);
+          spawnBurst(b.x, b.y, '#c4b5fd', 6);
+        }
+        if (b.trickT > 0) { b.trickT -= dt; if (b.trickT <= 0) b.spin = 0; }
+      }
+    }
+    balls = balls.filter(x => !x.dead);
+    // --- Arena condition effects (Gale Winds / Black Hole / Boost Lanes / Haunted Hall) ---
+    if (curCond === 'wind') {
+      for (const b of balls) {
+        b.vy += Math.sin(tNow * 2.2 + b.y * 0.02) * 1100 * hazardScale * dt;
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        b.vx = b.vx / sp * b.speed; b.vy = b.vy / sp * b.speed;
+      }
+    }
+    if (curCond === 'blackhole') {
+      const cx = W / 2, cy = H / 2;
+      for (const b of balls) {
+        const dx = cx - b.x, dy = cy - b.y;
+        const d = Math.max(1, Math.hypot(dx, dy));
+        if (d < H * 0.35) {
+          b.vy += (dy / d) * 1600 * hazardScale * dt;
+          const sp = Math.hypot(b.vx, b.vy) || 1;
+          b.vx = b.vx / sp * b.speed; b.vy = b.vy / sp * b.speed;
+        }
+      }
+    }
+    if (curCond === 'boosts') {
+      const laneA = H * 0.12, laneB = H * 0.88;
+      for (const b of balls) {
+        if (b.inLane === undefined) b.inLane = false;
+        const inLane = Math.abs(b.y - laneA) < 34 || Math.abs(b.y - laneB) < 34;
+        if (inLane && !b.inLane) {
+          b.speed = Math.min(b.speed + Math.round(25 * hazardScale), BALL_HARD_MAX);
+          const sp = Math.hypot(b.vx, b.vy) || 1;
+          b.vx = b.vx / sp * b.speed; b.vy = b.vy / sp * b.speed;
+          spawnBurst(b.x, b.y, '#ffd76a', 6);
+        }
+        b.inLane = inLane;
+      }
+    }
+    if (curCond === 'ghosts') {
+      ghostSpawnT -= dt;
+      if (ghostSpawnT <= 0 && balls.length < MAX_BALLS) {
+        ghostSpawnT = (3.5 + Math.random() * 2) / hazardScale;
+        const fromLeft = Math.random() < 0.5;
+        const y = BALL_R + 30 + Math.random() * (H - 60);
+        const dir = fromLeft ? 1 : -1;
+        balls.push({ x: fromLeft ? 10 : W - 10, y, speed: 380, vx: dir * 380, vy: 0, spin: 0, ghost: true });
+        procFlash('HAUNTED!', fromLeft ? 30 : W - 30, y, '#c084fc');
+        sfxGhost();
+      }
+    }
+    // Drifting obstacle blocks (Blockades hazard).
+    for (const o of obstacles) {
+      o.y += o.vy * dt; o.x += o.vx * dt;
+      if (o.y < o.h / 2 + 8) { o.y = o.h / 2 + 8; o.vy = Math.abs(o.vy); }
+      if (o.y > H - o.h / 2 - 8) { o.y = H - o.h / 2 - 8; o.vy = -Math.abs(o.vy); }
+      o.x = clamp(o.x, W * 0.15, W * 0.85);
+    }
+    updateAbilityTimers(dt);
+    playerUpdate(dt);
+    cpuUpdate(dt);
+  }
+
+  updateParticles(dt);
+  for (let i = procs.length - 1; i >= 0; i--) { procs[i].t -= dt; if (procs[i].t <= 0) procs.splice(i, 1); }
+  for (let i = bonks.length - 1; i >= 0; i--) { bonks[i].t -= dt; if (bonks[i].t <= 0) bonks.splice(i, 1); }
+  if (flashVig > 0) flashVig -= dt;
+  if (playerSlowT > 0) playerSlowT -= dt;
+  if (shake > 0) shake = Math.max(0, shake - 26 * dt);
+  if (msgT > 0) msgT -= dt;
+
+  // HUD status line
+  let status = '';
+  if (state === 'play' && curAI) {
+    if (curAI.ability === 'phantom' && phaseActive) status = '👻 PHASED';
+    else if (curAI.ability === 'surge' && surgeActive > 0) status = '⚡ SURGE';
+    else if (curAI.ability === 'quake' && quakeActive > 0) status = '🗿 QUAKE';
+    else if (curAI.ability === 'hex' && hexActive > 0) status = '🧙 HEXED';
+    else if (curAI.charge && chargeActive > 0) status = '⚡ ' + curAI.name.toUpperCase() + ' CHARGING';
+    else if (curAI.ability === 'lure' && lureActive > 0) status = '🧜 CONTROLS INVERTED!';
+    else if (curAI.ability === 'parry' && parryActive > 0) status = '🛡️ PARRY UP';
+    else if (curAI.ability === 'shell' && shellOpen > 0) status = '🐢 SHELL OPEN';
+    else if (curAI.ability === 'gamble' && gambleFreeze > 0) status = '🎲 BLUFFING';
+    else if (curAI.ability === 'weaver') status = '🕸️ BALLS: ' + balls.length + '/3';
+    else if (curAI.ability === 'bastion' && bastionActive > 0) status = '🏰 BASTION WALL';
+    else if (curAI.ability === 'echo' && echoActive > 0) status = '👥 ECHO UP';
+    else if (curAI.ability === 'gust' && gustActive > 0) status = '🌬️ GUST';
+    else if (curAI.ability === 'rage' && rageActive > 0) status = '👹 RAGE';
+    else if (curAI.ability === 'storm' && stormActive > 0) status = '⚡ STORM';
+    else if (curAI.ability === 'tide' && tideActive > 0) status = '🌊 TIDE';
+    else if (warpActive > 0) status = '⏳ SLOW-MO';
+    else if (frostT > 0) status = '🧊 CHILLED ' + frostT.toFixed(1) + 's';
+    else if (frozenLeft > 0) status = '❄️ CPU FROZEN ' + frozenLeft.toFixed(1) + 's';
+    else if (empLockT > 0) status = '📡 EMP LOCK';
+    else if (glitchActiveT > 0) status = '🖥️ GLITCHED';
+    else if (tremorT > 0) status = '🗿 TREMOR';
+    if (charmed) status += (status ? ' · ' : '') + '🍀 CHARMED';
+    if (batteryReady) status += (status ? ' · ' : '') + '🔋 CHARGED';
+    if (has('ghost_ball') && ghostCharges > 0) status += (status ? ' · ' : '') + '👻 ' + ghostCharges + ' passes';
+    if (has('shield') && shieldsLeft > 0) status += (status ? ' · ' : '') + '🛡️ ' + shieldsLeft;
+    if (has('phoenix') && !phoenixUsed) status += (status ? ' · ' : '') + '🔥 phoenix';
+  }
+  if (cpuFury > 0) status += (status ? ' · ' : '') + '<span class="fury">😡 CPU FURY ×' + cpuFury + '</span>';
+  aiStatusEl.innerHTML = status;   // innerHTML: status only holds static text/numbers + the .fury span
+}
+
+/* ============================== Render ============================== */
+function rr(x, y, w, h) {
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.closePath();
+}
+
+function render() {
+  ctx.save();
+  ctx.setTransform(PIXEL, 0, 0, PIXEL, 0, 0);
+  if (shake > 0) ctx.translate((Math.random() * 2 - 1) * shake, (Math.random() * 2 - 1) * shake);
+
+  // Dungeon floor
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#141026'); g.addColorStop(0.5, '#100d20'); g.addColorStop(1, '#0a0818');
+  ctx.fillStyle = g;
+  ctx.fillRect(-10, -10, W + 20, H + 20);
+
+  drawBackdrop();
+
+  // Pixel grid floor
+  ctx.strokeStyle = 'rgba(120,90,220,0.05)'; ctx.lineWidth = 1;
+  for (let y = 0; y < H; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let x = 0; x < W; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+
+  // Arena border
+  ctx.strokeStyle = 'rgba(90,70,160,0.6)'; ctx.lineWidth = 3;
+  ctx.strokeRect(2, 2, W - 4, H - 4);
+  ctx.setLineDash([10, 14]);
+  ctx.strokeStyle = 'rgba(160,140,255,0.18)';
+  ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // --- Arena condition floor visuals ---
+  if (curCond === 'slick') {
+    ctx.fillStyle = 'rgba(125,211,252,0.05)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(125,211,252,0.08)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 12; i++) { ctx.beginPath(); ctx.moveTo(0, i * 60 + 30); ctx.lineTo(W, i * 60 - 60 + 30); ctx.stroke(); }
+  }
+  if (curCond === 'boosts') {
+    for (const lane of [H * 0.12, H * 0.88]) {
+      ctx.fillStyle = 'rgba(255,215,106,' + (0.08 + 0.04 * Math.sin(tNow * 5)) + ')';
+      ctx.fillRect(0, lane - 30, W, 60);
+      ctx.fillStyle = 'rgba(255,215,106,0.25)';
+      ctx.fillRect(0, lane - 2, W, 4);
+    }
+  }
+  if (curCond === 'blackhole') {
+    const cx = W / 2, cy = H / 2;
+    const R = Math.min(W, H) * 0.09, pulse = 1 + Math.sin(tNow * 3) * 0.08;
+    // Soft influence halo (subtle — never obstructs the play line).
+    const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 2.4 * pulse);
+    g.addColorStop(0, 'rgba(120,60,200,0.10)');
+    g.addColorStop(0.5, 'rgba(120,60,200,0.05)');
+    g.addColorStop(1, 'rgba(120,60,200,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 2.4 * pulse, 0, Math.PI * 2); ctx.fill();
+    // Spinning accretion arcs (3 layered swirls).
+    ctx.lineWidth = 3;
+    for (let a = 0; a < 3; a++) {
+      const rot = tNow * (1.6 + a * 0.5) + a * 2.1;
+      ctx.strokeStyle = ['rgba(168,85,247,0.55)', 'rgba(216,180,254,0.35)', 'rgba(124,58,237,0.5)'][a];
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * (1 + a * 0.28) * pulse, rot, rot + Math.PI * (1.15 - a * 0.25));
+      ctx.stroke();
+    }
+    // Dashed outer orbit ring.
+    ctx.strokeStyle = 'rgba(216,180,254,0.25)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.arc(cx, cy, R * 1.95, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    // Dense dark core with a bright photon center.
+    ctx.fillStyle = '#2a1148';
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.55 * pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e9d5ff';
+    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  if (curCond === 'wind') {
+    ctx.strokeStyle = 'rgba(165,243,252,0.10)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const yy = (i + 0.5) * H / 6;
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 14) {
+        const y = yy + Math.sin(tNow * 2.2 + x * 0.03 + i) * 10;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  // Drifting Blockades obstacle blocks.
+  for (const o of obstacles) {
+    ctx.fillStyle = '#2a1f4a';
+    rr(o.x - o.w / 2 - 2, o.y - o.h / 2 - 2, o.w + 4, o.h + 4); ctx.fill();
+    ctx.fillStyle = '#c084fc';
+    rr(o.x - o.w / 2, o.y - o.h / 2, o.w, o.h); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    rr(o.x - o.w / 2 + 2, o.y - o.h / 2 + 4, 3, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
+    ctx.strokeRect(o.x - o.w / 2, o.y - o.h / 2, o.w, o.h);
+  }
+
+  for (const gh of ghosts) {
+    ctx.globalAlpha = Math.max(0, gh.life / 0.28) * 0.22;
+    ctx.fillStyle = COLORS.ball;
+    rr(gh.x - BALL_R * 0.75, gh.y - BALL_R * 0.75, BALL_R * 1.5, BALL_R * 1.5); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  for (const p of particles) {
+    ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
+    ctx.fillStyle = p.color;
+    rr(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Spin ribbons: a fading trail behind every spinning ball so curves are unmistakable.
+  for (const b of balls) {
+    if (b.trail && b.trail.length > 1) {
+      const len = b.trail.length;
+      for (let i = 0; i < len; i++) {
+        const t = b.trail[i];
+        const f = i / len;
+        ctx.globalAlpha = f * 0.28;
+        ctx.fillStyle = b.spin > 0 ? '#ffd76a' : '#ff5d8f';
+        const s = 2 + f * 3;
+        rr(t.x - s / 2, t.y - s / 2, s, s); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Ball(s)
+  for (const b of balls) {
+    const pulse = serveTimer > 0 && balls.length === 1 ? Math.sin(tNow * 9) * 1.6 : 0;
+    const r = (BALL_R + pulse) * (b.mini ? 0.65 : 1);
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    if (b.clone) ctx.globalAlpha = 0.34 + Math.sin(tNow * 18) * 0.16;   // holo clones flicker faintly
+    if (b.spin) ctx.rotate(tNow * b.spin * 10);
+    ctx.rotate(Math.PI / 4);
+    ctx.shadowColor = b.bolt ? '#ffd76a' : COLORS.ball; ctx.shadowBlur = b.bolt ? 30 : (b.mini ? 14 : 22);
+    ctx.fillStyle = b.bolt ? '#ffd76a' : (b.mini ? '#7dffa8' : '#8ef0ff');
+    rr(-r, -r, r * 2, r * 2); ctx.fill();
+    ctx.fillStyle = b.bolt ? '#fff2c8' : '#ffffff';
+    rr(-r * 0.35, -r * 0.35, r * 0.7, r * 0.7); ctx.fill();
+    // Spin notch: a small marker so heavy spin is visible as the ball rotates
+    if (b.spin) {
+      ctx.fillStyle = b.spin > 0 ? '#ffd76a' : '#ff5d8f';
+      rr(-r * 0.18, -r * 0.75, r * 0.36, r * 0.3); ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+  ctx.shadowColor = 'transparent';
+  drawPaddle(paddleL, curAI ? curAI.color : COLORS.cpu, cpuPaddleH(), curAI && curAI.ability === 'phantom' && phaseActive ? 0.35 : 1, curAI && curAI.ability === 'surge' && surgeActive > 0, '');
+  drawPaddle(paddleR, COLORS.player, playerPaddleH(), 1, false, hexActive > 0 ? '🧙' : '');
+  if (has('second_paddle')) drawPaddle(paddleR2, '#4d7cff', defenderH(), 0.65, false, '');
+  // The Echo's afterimage (ghost paddle that returns the ball at double angle).
+  if (curAI && curAI.ability === 'echo' && echoActive > 0) {
+    drawPaddle({ x: paddleL.x, y: echoY }, '#7dd3fc', cpuPaddleH(), 0.4, false, '');
+  }
+  // The Bastion's energy wall (catches one ball that slips past the paddle).
+  if (curAI && curAI.ability === 'bastion' && bastionActive > 0) {
+    ctx.fillStyle = 'rgba(154,208,255,0.22)';
+    ctx.fillRect(paddleL.x - PADDLE_W / 2 - 11, 0, 9, H);
+    ctx.fillStyle = 'rgba(154,208,255,0.5)';
+    ctx.fillRect(paddleL.x - PADDLE_W / 2 - 13, 0, 2, H);
+    ctx.fillStyle = 'rgba(154,208,255,0.5)';
+    ctx.fillRect(paddleL.x - PADDLE_W / 2 - 11, 0, 2, H);
+  }
+  // The Ogre's rage aura.
+  if (curAI && curAI.ability === 'rage' && rageActive > 0) {
+    ctx.fillStyle = 'rgba(248,113,113,0.18)';
+    ctx.fillRect(paddleL.x - PADDLE_W / 2 - 6, paddleL.y - cpuPaddleH() / 2 - 6, PADDLE_W + 12, cpuPaddleH() + 12);
+  }
+  // The Archon's storm: lightning border on the paddle.
+  if (curAI && curAI.ability === 'storm' && stormActive > 0) {
+    const pulse = 3 + Math.sin(tNow * 20) * 2;
+    ctx.strokeStyle = 'rgba(253,224,71,' + (0.5 + 0.4 * Math.sin(tNow * 20)) + ')';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(paddleL.x - PADDLE_W / 2 - 7 - pulse, paddleL.y - cpuPaddleH() / 2 - 7 - pulse, PADDLE_W + 14 + pulse * 2, cpuPaddleH() + 14 + pulse * 2);
+    ctx.fillStyle = 'rgba(253,224,71,0.08)';
+    ctx.fillRect(paddleL.x - PADDLE_W / 2 - 6, paddleL.y - cpuPaddleH() / 2 - 6, PADDLE_W + 12, cpuPaddleH() + 12);
+  }
+  // The Zephyr's gust: wind ripples across the court.
+  if (gustActive > 0) {
+    ctx.strokeStyle = 'rgba(165,243,252,0.10)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const yy = (i + 0.5) * H / 5;
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 14) {
+        const y = yy + Math.sin(tNow * 6 + x * 0.04) * 16;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  // The Leviathan's tide: a creeping band of water at the top or bottom.
+  if (tideActive > 0) {
+    ctx.fillStyle = 'rgba(96,165,250,0.10)';
+    ctx.fillRect(0, tideDir > 0 ? H - 34 : 0, W, 34);
+    ctx.fillStyle = 'rgba(96,165,250,0.22)';
+    ctx.fillRect(0, tideDir > 0 ? H - 34 : 0, W, 6);
+  }
+  // Player paddle motion lines: visible swipe marks when you strike fast (spin tell).
+  if (Math.abs(paddleR.vy) > 260) {
+    ctx.fillStyle = 'rgba(56,225,255,0.5)';
+    const dir = Math.sign(paddleR.vy);
+    for (let i = 0; i < 3; i++) {
+      const yy = paddleR.y + dir * (18 + i * 14);
+      rr(paddleR.x + PADDLE_W / 2 + 4, yy, 7, 3); ctx.fill();
+      rr(paddleR.x - PADDLE_W / 2 - 11, yy, 7, 3); ctx.fill();
+    }
+  }
+
+  // Ability aura for CPU
+  if (curAI && curAI.ability === 'phantom' && phaseActive) {
+    ctx.strokeStyle = 'rgba(192,132,252,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(paddleL.x - PADDLE_W / 2 - 6, paddleL.y - cpuPaddleH() / 2 - 6, PADDLE_W + 12, cpuPaddleH() + 12);
+  }
+  if (curAI && curAI.ability === 'smasher') {
+    ctx.fillStyle = 'rgba(251,146,60,0.14)';
+    ctx.font = "9px " + FONT_PIXEL;
+    ctx.textAlign = 'center';
+    ctx.fillText('POWER HITS', paddleL.x, paddleL.y + cpuPaddleH() / 2 + 18);
+  }
+  if (curAI && curAI.ability === 'quake' && quakeActive > 0) {
+    ctx.strokeStyle = 'rgba(255,120,60,0.5)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(paddleL.x - PADDLE_W / 2 - 8, paddleL.y - cpuPaddleH() / 2 - 8, PADDLE_W + 16, cpuPaddleH() + 16);
+  }
+  if (curAI && curAI.charge && chargeActive > 0) {
+    const pulse = 4 + Math.sin(tNow * 14) * 2;
+    ctx.strokeStyle = 'rgba(255,215,106,' + (0.55 + 0.35 * Math.sin(tNow * 14)) + ')';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(paddleL.x - PADDLE_W / 2 - 8 - pulse, paddleL.y - cpuPaddleH() / 2 - 8 - pulse, PADDLE_W + 16 + pulse * 2, cpuPaddleH() + 16 + pulse * 2);
+    ctx.fillStyle = 'rgba(255,215,106,0.08)';
+    ctx.fillRect(paddleL.x - PADDLE_W / 2 - 6, paddleL.y - cpuPaddleH() / 2 - 6, PADDLE_W + 12, cpuPaddleH() + 12);
+  }
+  if (curAI && curAI.ability === 'parry' && parryActive > 0) {
+    ctx.strokeStyle = '#93c5fd';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(paddleL.x - PADDLE_W / 2 - 10, paddleL.y - cpuPaddleH() / 2 - 10, PADDLE_W + 20, cpuPaddleH() + 20);
+    ctx.fillStyle = 'rgba(147,197,253,0.18)';
+    ctx.fillRect(paddleL.x - PADDLE_W / 2 - 10, paddleL.y - cpuPaddleH() / 2 - 10, PADDLE_W + 20, cpuPaddleH() + 20);
+  }
+  if (curAI && curAI.ability === 'hunt') {
+    // Show the Falcon's locked-on target (open side of the court).
+    const targetY = paddleR.y > H / 2 ? H * 0.15 : H * 0.85;
+    ctx.strokeStyle = 'rgba(252,165,165,0.45)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(paddleR.x - 12, targetY - 12, 24, 24);
+    ctx.beginPath(); ctx.moveTo(paddleR.x - 16, targetY); ctx.lineTo(paddleR.x - 8, targetY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(paddleR.x + 8, targetY); ctx.lineTo(paddleR.x + 16, targetY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(paddleR.x, targetY - 16); ctx.lineTo(paddleR.x, targetY - 8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(paddleR.x, targetY + 8); ctx.lineTo(paddleR.x, targetY + 16); ctx.stroke();
+  }
+  if (batteryReady) {
+    ctx.strokeStyle = 'rgba(255,215,106,' + (0.5 + 0.4 * Math.sin(tNow * 9)) + ')';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(paddleR.x - PADDLE_W / 2 - 4, paddleR.y - playerPaddleH() / 2 - 4, PADDLE_W + 8, playerPaddleH() + 8);
+  }
+  if (warpActive > 0) {
+    ctx.fillStyle = 'rgba(80,200,255,0.07)';
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Flashbang ball: a white blink vignette when the flash fires on your side.
+  if (flashVig > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.min(0.8, flashVig * 2.6)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Floating proc indicators (small pixel flashes)
+  for (const pr of procs) {
+    const a = clamp(pr.t / pr.max, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.font = "8px " + FONT_PIXEL;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#000';
+    ctx.fillText(pr.text, pr.x + 1, pr.y - (1 - a) * 14 + 1);
+    ctx.fillStyle = pr.color;
+    ctx.fillText(pr.text, pr.x, pr.y - (1 - a) * 14);
+  }
+  ctx.globalAlpha = 1;
+
+  // Cartoon hit-pops (Pizza-Tower style): chunky impact words, black outline, punch-in scale.
+  for (const bk of bonks) {
+    const p = clamp(bk.t / bk.max, 0, 1);
+    const punch = 1 + (1 - Math.min(1, (bk.max - bk.t) / 0.12)) * 0.85;
+    ctx.save();
+    ctx.globalAlpha = p;
+    ctx.translate(bk.x, bk.y - (1 - p) * 16);
+    ctx.rotate(bk.rot);
+    ctx.scale(punch * bk.s, punch * bk.s);
+    ctx.font = `${Math.round(12 * bk.s)}px "Press Start 2P", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.lineJoin = 'miter'; ctx.strokeStyle = '#191612';
+    ctx.strokeText(bk.text, 0, 0);
+    ctx.fillStyle = bk.color;
+    ctx.fillText(bk.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
+  if (msgT > 0 && (state === 'play' || state === 'over' || state === 'draft')) {
+    const alpha = msgT > 1.1 ? (1.3 - msgT) / 0.2 : Math.min(1, msgT / 0.45);
+    ctx.globalAlpha = clamp(alpha, 0, 1);
+    ctx.font = "20px " + FONT_PIXEL;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#000';
+    ctx.fillText(msg, W / 2 + 2, H / 2 - 82 + 2);
+    ctx.fillStyle = '#f4fbff';
+    ctx.fillText(msg, W / 2, H / 2 - 82);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+function drawPaddle(p, color, h, alpha, surge, emblem) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = surge ? '#fff' : color;
+  ctx.shadowBlur = surge ? 30 : 14;
+  ctx.fillStyle = '#0a0818';
+  rr(p.x - PADDLE_W / 2 - 2, p.y - h / 2 - 2, PADDLE_W + 4, h + 4); ctx.fill();
+  ctx.fillStyle = surge ? '#facc15' : color;
+  rr(p.x - PADDLE_W / 2, p.y - h / 2, PADDLE_W, h); ctx.fill();
+  ctx.shadowBlur = 0;
+  // pixel highlight blocks
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  rr(p.x - PADDLE_W / 2 + 3, p.y - h / 2 + 4, 3, 8); ctx.fill();
+  rr(p.x - PADDLE_W / 2 + 3, p.y - h / 2 + 16, 3, 8); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  rr(p.x - PADDLE_W / 2 + 8, p.y + h / 2 - 12, 3, 8); ctx.fill();
+  if (emblem) {
+    ctx.font = "10px " + FONT_BODY;
+    ctx.textAlign = 'center';
+    ctx.fillText(emblem, p.x, p.y);
+  }
+  ctx.restore();
+}
+
+/* ============================== Input ============================== */
+window.addEventListener('keydown', e => {
+  const k = e.key;
+  if (['ArrowUp', 'ArrowDown', ' ', 'Spacebar'].includes(k)) e.preventDefault();
+  const n = k === 'ArrowUp' ? 'up' : k === 'ArrowDown' ? 'down' : k.toLowerCase();
+  keys[n] = true;
+  if (k === 'p' || k === 'P' || k === 'Escape') togglePause();
+  if (k === 'm' || k === 'M') toggleMute();
+});
+window.addEventListener('keyup', e => {
+  const k = e.key;
+  const n = k === 'ArrowUp' ? 'up' : k === 'ArrowDown' ? 'down' : k.toLowerCase();
+  keys[n] = false;
+});
+window.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouseY = e.clientY - rect.top;   // box-relative so windowed mode aims correctly
+  if (state === 'play') mouseActive = true;
+});
+window.addEventListener('touchmove', e => {
+  if (e.touches.length) { const rect = canvas.getBoundingClientRect(); mouseY = e.touches[0].clientY - rect.top; if (state === 'play') mouseActive = true; }
+}, { passive: false });
+window.addEventListener('blur', () => { if (state === 'play') togglePause(); });
+window.addEventListener('resize', resize);
+
+$('btnNewRun').addEventListener('click', openStakes);
+$('btnNewRun2').addEventListener('click', openStakes);
+$('btnStakes').addEventListener('click', openStakes);
+$('btnUpgrades').addEventListener('click', openMeta);
+$('btnStakesBack').addEventListener('click', closeStakes);
+$('btnStakesGo').addEventListener('click', beginRunWithStakes);
+$('btnMetaBack').addEventListener('click', closeMeta);
+$('btnEventSkip').addEventListener('click', skipEvent);
+$('btnServe').addEventListener('click', startMatch);
+$('btnRetry').addEventListener('click', startMatch);
+$('btnAbandon').addEventListener('click', showMenu);
+$('btnMenu2').addEventListener('click', showMenu);
+btnPause.addEventListener('click', togglePause);
+btnMute.addEventListener('click', toggleMute);
+$('btnResume').addEventListener('click', togglePause);
+$('btnQuit').addEventListener('click', showMenu);
+$('btnShopLeave').addEventListener('click', leaveShop);
+$('btnReroll').addEventListener('click', rerollShop);
+
+function togglePause() {
+  if (state === 'play') { state = 'paused'; pauseEl.classList.remove('hidden'); }
+  else if (state === 'paused') { state = 'play'; pauseEl.classList.add('hidden'); last = performance.now(); }
+}
+function toggleMute() {
+  muted = !muted;
+  storeSet('neonpong_muted', muted ? '1' : '0');
+  btnMute.textContent = muted ? '🔇' : '🔊';
+}
+
+/* ============================== Display modes ============================== */
+let displayMode = storeGet('neonpong_display') || 'borderless';   // 'window' | 'borderless' | 'fullscreen'
+function syncDispBtns() {
+  document.querySelectorAll('#dispBtns [data-disp], #dispBtns2 [data-disp]').forEach(b => b.classList.toggle('on', b.dataset.disp === displayMode));
+}
+function applyDisplay() {
+  document.body.classList.toggle('disp-window', displayMode === 'window');
+  document.body.classList.toggle('disp-borderless', displayMode !== 'window');
+  if (displayMode === 'fullscreen') {
+    const el = document.documentElement;
+    if (el && el.requestFullscreen) el.requestFullscreen().catch(() => { displayMode = 'borderless'; applyDisplay(); });
+    else { displayMode = 'borderless'; applyDisplay(); return; }
+  } else if (document.fullscreenElement && document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
+  storeSet('neonpong_display', displayMode);
+  syncDispBtns();
+  void canvas.offsetWidth;   // reflow so the boxed rect is fresh
+  resize();
+}
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && displayMode === 'fullscreen') { displayMode = 'borderless'; applyDisplay(); }
+});
+document.querySelectorAll('#dispBtns [data-disp], #dispBtns2 [data-disp]').forEach(b => b.addEventListener('click', () => { displayMode = b.dataset.disp; applyDisplay(); }));
+
+/* ============================== Stage backdrops (dynamic, non-obstructive) ============================== */
+let stage2d = storeGet('neonpong_stage') || 'city';   // 'none' | 'city' | 'crowd' | 'dunes' | 'nebula'
+function syncStageBtns() {
+  document.querySelectorAll('#stageBtns [data-stage], #stageBtnsMenu [data-stage]').forEach(b => b.classList.toggle('on', b.dataset.stage === stage2d));
+}
+function setStage2d(v) { stage2d = v; storeSet('neonpong_stage', stage2d); syncStageBtns(); }
+document.querySelectorAll('#stageBtns [data-stage], #stageBtnsMenu [data-stage]').forEach(b => b.addEventListener('click', () => setStage2d(b.dataset.stage)));
+function drawBackdrop() {
+  if (!stage2d || stage2d === 'none') return;
+  const bx = balls.length ? balls[0].x : W / 2;
+  if (stage2d === 'city') {
+    // Skyline towers on the top & bottom edges, leaning toward the ball
+    for (let i = 0; i < 16; i++) {
+      const bw = 34 + (i * 53) % 52, bh = 36 + (i * 89) % 150;
+      const tx = (i / 15) * (W + 200) - 100 + Math.sin(tNow * 0.25 + i * 1.3) * 5;
+      const lean = (bx - W / 2) / W * 26;
+      ctx.fillStyle = 'rgba(56,225,255,0.11)';
+      ctx.fillRect(tx, 0, bw, bh);
+      ctx.fillStyle = 'rgba(255,93,143,0.13)';
+      ctx.fillRect(tx + lean, bh - 4, bw, 4);
+      ctx.fillStyle = 'rgba(142,240,255,0.15)';
+      for (let k = 0; k < 5; k++) {
+        const wy = 7 + Math.floor(k / 2) * 15 + Math.sin(tNow * 2.2 + i + k) * 2;
+        ctx.fillRect(tx + 5 + (k % 2) * (bw - 14), wy, 3, 4);
+      }
+      ctx.fillStyle = 'rgba(56,225,255,0.11)';
+      ctx.fillRect(tx, H - bh, bw, bh);
+      ctx.fillStyle = 'rgba(255,93,143,0.13)';
+      ctx.fillRect(tx + lean, H - 4, bw, 4);
+      ctx.fillStyle = 'rgba(142,240,255,0.15)';
+      for (let k = 0; k < 5; k++) {
+        ctx.fillRect(tx + 5 + (k % 2) * (bw - 14), H - bh + 7 + Math.floor(k / 2) * 15 + Math.sin(tNow * 2.2 + i + k) * 2, 3, 4);
+      }
+    }
+  } else if (stage2d === 'crowd') {
+    // Spectator heads along the top & bottom, eyes tracking the ball
+    for (let i = 0; i < 30; i++) {
+      const hx = (i / 29) * (W + 30) - 15;
+      const track = clamp((bx - hx) * 0.012, -3, 3);
+      const bob = Math.sin(tNow * 2.4 + i * 0.7) * 1.5;
+      ctx.fillStyle = 'rgba(56,225,255,0.13)';
+      ctx.fillRect(hx - 4, 4 + bob, 8, 8);
+      ctx.fillStyle = 'rgba(255,93,143,0.18)';
+      ctx.fillRect(hx - 2 + track, 6 + bob, 2, 3);
+      ctx.fillStyle = 'rgba(56,225,255,0.13)';
+      ctx.fillRect(hx - 4, H - 12 - bob, 8, 8);
+      ctx.fillStyle = 'rgba(255,93,143,0.18)';
+      ctx.fillRect(hx - 2 + track, H - 10 - bob, 2, 3);
+    }
+  } else if (stage2d === 'dunes') {
+    // Rolling dunes at top & bottom with a wandering sun
+    ctx.fillStyle = 'rgba(168,85,247,0.15)';
+    for (let i = 0; i < 4; i++) {
+      const base = 8 + i * 18;
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 20) {
+        const y = base + Math.sin(x * 0.014 + i * 1.6 + tNow * 0.3) * 9;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W, 0); ctx.lineTo(0, 0); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 20) {
+        const y = H - base + Math.sin(x * 0.014 + i * 1.6 + tNow * 0.3) * 9;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+    }
+    const sunX = W / 2 + (bx - W / 2) * 0.4;
+    const sg = ctx.createRadialGradient(sunX, 70, 4, sunX, 70, 64);
+    sg.addColorStop(0, 'rgba(255,180,90,0.18)');
+    sg.addColorStop(1, 'rgba(255,140,60,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sunX, 70, 64, 0, Math.PI * 2); ctx.fill();
+  } else if (stage2d === 'nebula') {
+    // Drifting, twinkling stars
+    for (let i = 0; i < 46; i++) {
+      const sx = (i * 97) % W, sy = (i * 173) % H;
+      const tw = 0.35 + 0.5 * Math.abs(Math.sin(tNow * 1.5 + i));
+      ctx.fillStyle = 'rgba(216,180,254,' + tw.toFixed(2) + ')';
+      ctx.fillRect(sx + Math.sin(tNow * 0.3 + i) * 9, sy + Math.cos(tNow * 0.22 + i * 1.7) * 6, 2, 2);
+    }
+  }
+}
+
+/* ============================== Main loop ============================== */
+muted = storeGet('neonpong_muted') === '1';
+btnMute.textContent = muted ? '🔇' : '🔊';
+resize();
+applyDisplay();
+syncStageBtns();
+metaLoad();
+updateBestLine();
+updateMetaUI();
+updateHearts();
+if (document.fonts && document.fonts.load) {
+  try { document.fonts.load('16px "Press Start 2P"'); document.fonts.load('20px "VT323"'); } catch (e) { /* ignore */ }
+}
+
+function loop(t) {
+  const rect = canvas.getBoundingClientRect();
+  if (Math.round(rect.width) !== W || Math.round(rect.height) !== H) resize();
+  const dt = Math.min(Math.max((t - last) / 1000, 0), 1 / 30);
+  last = t;
+  tNow += dt;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* Debug / validation hooks (invisible to players). */
+window.__pong = {
+  get state() { return state; },
+  get round() { return run.round; },
+  get lives() { return run.lives; },
+  get scores() { return scores; },
+  get ballCount() { return balls.length; },
+  get balls() { return balls; },
+  get serveTimer() { return serveTimer; },
+  get playerPaddleH() { return playerPaddleH(); },
+  get cpuPaddleH() { return cpuPaddleH(); },
+  get player() { return paddleR; },
+  get cpu() { return paddleL; },
+  get powerups() { return run.powerups.slice(); },
+  get upgrades() { return run.upgrades.slice(); },
+  get gold() { return run.gold; },
+  get shopOffers() { return shopOffers.slice(); },
+  get maxLives() { return maxLives(); },
+  get cores() { return META.cores; },
+  get meta() { return { cores: META.cores, upg: { ...META.upg }, seenPups: META.seenPups.length, seenAI: META.seenAI.length, seenSyn: META.seenSyn.length }; },
+  get stakes() { return (run.stakes || []).slice(); },
+  get goldMult() { return goldMult(); },
+  get condition() { return curCond; },
+  get obstacles() { return obstacles.length; },
+  get synergies() { return activeSynergies().map(s => s.id); },
+  get freeRerolls() { return run.freeRerolls || 0; },
+  get betrayal() { return run.betrayal; },
+  get ai() { return curAI ? curAI.name : null; },
+  get shields() { return shieldsLeft; },
+  get ghostCharges() { return ghostCharges; },
+  get phased() { return phaseActive; },
+  get frozen() { return frozenLeft; },
+  get surgeActive() { return surgeActive; },
+  get frostT() { return frostT; },
+  get warpActive() { return warpActive; },
+  get hexActive() { return hexActive; },
+  get quakeActive() { return quakeActive; },
+  get gustActive() { return gustActive; },
+  get tideActive() { return tideActive; },
+  get rageActive() { return rageActive; },
+  get stormActive() { return stormActive; },
+  get bastionActive() { return bastionActive; },
+  get echoActive() { return echoActive; },
+  get phoenixUsed() { return phoenixUsed; },
+  get cpuShrink() { return cpuShrink; },
+  get batteryReady() { return batteryReady; },
+  get parryActive() { return parryActive; },
+  get lureActive() { return lureActive; },
+  get shellOpen() { return shellOpen; },
+  get gambleFreeze() { return gambleFreeze; },
+  get chargeActive() { return chargeActive; },
+  get cpuFury() { return cpuFury; },
+  get spin() { return balls.length ? balls[0].spin : 0; },
+  get ballSpeed() { return balls.length ? Math.hypot(balls[0].vx, balls[0].vy) : 0; },
+  get procs() { return procs.length; },
+  get winScore() { return WIN_SCORE; },
+  get pixel() { return PIXEL; },
+  get canvasW() { return canvas.width; },
+  key(n, v) { keys[n] = v; },
+  deploy(x, y, vx, vy, speed) {
+    const b = balls[0] || newBall(x, y);
+    b.x = x; b.y = y; b.vx = vx; b.vy = vy;
+    b.speed = speed || Math.hypot(vx, vy);
+    if (!balls.includes(b)) balls.push(b);
+    serveTimer = 0;
+    return b;
+  },
+  startRun, pick: pickDraft, serve: startMatch, retry: startMatch, quit: showMenu, point,
+  openShop, buyShop, rerollShop, leaveShop,
+  openStakes, openMeta, openEvent, pickEvent, skipEvent,
+  forceCond(id) { curCond = id; const o = $('oppCond'); if (o && id) o.textContent = COND_BY_ID[id].icon + ' HAZARD — ' + COND_BY_ID[id].desc; const c = $('condChip'); if (c) c.textContent = id ? COND_BY_ID[id].icon + ' ' + COND_BY_ID[id].name : ''; if (id === 'obstacles') obstacles = [ { x: W * 0.35, y: H * 0.28, w: 12, h: 92, vy: 120, vx: 40 }, { x: W * 0.62, y: H * 0.72, w: 12, h: 92, vy: -120, vx: -40 } ]; else obstacles = []; },
+  addStake(id) { if (!runStakes.includes(id)) runStakes.push(id); },
+  clearStakes() { runStakes = []; },
+  addCores(n) { earnCores(n); },
+  addGold(n) { run.gold += n; updateGold(); },
+  addUpg(id) { run.upgrades.push(id); updateHearts(); updateGold(); },
+  addPup(id) {
+    run.powerups.push(id);
+    if (id === 'extra_life') run.lives = Math.min(maxLives(), run.lives + 1);
+    updateHearts(); updatePupIcons();
+  },
+  win: winMatch,
+  lose: loseMatch,
+  skipToRound(n) { run.round = n; },
+  tick(ms = 16.667) {
+    const dt = Math.min(ms / 1000, 1 / 30);
+    last = performance.now();
+    tNow += dt;
+    update(dt);
+    render();
+  },
+};
+
+/* Optional deep-link: pong.html?autostart=1 begins a run immediately. */
+try {
+  if (new URLSearchParams(location.search).get('autostart')) startRun();
+} catch (e) { /* ignore */ }
+})();
+</script>
+</body>
+</html>

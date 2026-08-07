@@ -1,0 +1,6 @@
+# Freebuff app data (private - chat history & database)
+.freebuff/
+
+# Backup files
+*.bak
+*.bak-modular
