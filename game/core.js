@@ -535,24 +535,60 @@ function updateStage() {
     }
   }
   if (stage === 'city') {
-    for (const t of stageData.towers) {
-      t.mesh.rotation.z = clamp((CW / 2 - bx) * 0.0006 * t.side, -0.16, 0.16);
-      t.mesh.rotation.x = clamp(bz * 0.0002, -0.12, 0.12);
+    // Very few building lights slowly turn OFF, stay off a while, then slowly come
+    // back - a long, lazy cycle, never a flash. Picks across the skyline + towers.
+    const W = stageData.winPool;
+    if (W && W.length) {
+      const act = stageData.winActive || (stageData.winActive = []);
+      if (act.length < 3 && Math.random() < dt * 0.14) {
+        const pick = W[Math.floor(Math.random() * W.length)];
+        if (pick && !act.some(e => e.src === pick)) {
+          act.push({ src: pick, t: 0, lastB: 1,
+            dimT: 1.4 + Math.random() * 1.0,
+            holdT: 8 + Math.random() * 14,
+            riseT: 1.8 + Math.random() * 1.4 });
+        }
+      }
+      for (let i = act.length - 1; i >= 0; i--) {
+        const e = act[i];
+        const srcW = e.src;
+        e.t += dt;
+        let b;
+        if (e.t < e.dimT) b = 1 - (e.t / e.dimT) * 0.85;
+        else if (e.t < e.dimT + e.holdT) b = 0.15;
+        else if (e.t < e.dimT + e.holdT + e.riseT) b = 0.15 + ((e.t - e.dimT - e.holdT) / e.riseT) * 0.85;
+        else b = 1;
+        if (e.t >= e.dimT + e.holdT + e.riseT) {
+          if (srcW.kind === 'mesh') srcW.mesh.material.opacity = srcW.baseOp;
+          else drawCityCell(srcW, 1);
+          act.splice(i, 1);
+          continue;
+        }
+        if (srcW.kind === 'mesh') srcW.mesh.material.opacity = srcW.baseOp * b;
+        else if (Math.abs(b - e.lastB) > 0.02) drawCityCell(srcW, b);
+        e.lastB = b;
+      }
     }
-    for (const w of stageData.windows) {
-      const pulse = 0.5 + 0.5 * Math.sin(tNow * 2.6 + w.ph);
-      const prox = 1 - clamp(Math.abs(w.z - bz) / (CL / 2), 0, 1);
-      w.mesh.scale.y = 0.6 + 0.7 * pulse * (0.45 + prox * 0.55);
-      w.mesh.material.opacity = 0.3 + 0.7 * pulse * (0.5 + prox * 0.5);
+    // Steam vents puff softly; silhouetted pedestrians shuffle the sidewalks.
+    for (const st of stageData.steam) {
+      const tk = (tNow + st.ph) % st.dur;
+      const k = tk / st.dur;
+      st.mesh.position.y = st.baseY + k * st.rise;
+      st.mesh.material.opacity = Math.sin(k * Math.PI) * st.maxOp;
+      st.mesh.scale.x = st.baseScale * (1 + k * 0.7);
+      st.mesh.scale.y = st.baseScale * 1.6 * (1 + k * 0.9);
     }
-    // Rooftop signs + ground neon strips flicker, flare with the ball.
-    for (const s of stageData.signs) {
-      s.mesh.material.opacity = 0.35 + 0.55 * (0.5 + 0.5 * Math.sin(tNow * 1.8 + s.ph)) + (close ? 0.2 : 0) + pace * 0.12;
+    for (const p of stageData.peds) {
+      p.group.position.z += p.dir * p.speed * dt;
+      if (p.group.position.z > p.maxZ) { p.dir = -1; p.group.rotation.y = Math.PI; }
+      if (p.group.position.z < p.minZ) { p.dir = 1; p.group.rotation.y = 0; }
+      p.group.position.y = Math.abs(Math.sin(tNow * 4.4 + p.ph)) * 1.6;
+      const sw = Math.sin(tNow * 4.4 + p.ph) * 0.55;
+      p.legL.rotation.x = -sw; p.legR.rotation.x = sw;
+      p.armL.rotation.x = sw; p.armR.rotation.x = -sw;
+      p.visor.material.opacity = 0.75 + 0.25 * Math.sin(tNow * 2 + p.ph);
     }
-    for (const s of dataStreams) {
-      s.mesh.position.y += s.speed * dt;
-      if (s.mesh.position.y > CH * 1.6) s.mesh.position.y = -CH * 0.5;
-    }
+  
   } else if (stage === 'crowd') {
     for (const s of stageData.crowd) {
       s.head.rotation.z = clamp((bx - s.x) * 0.0025, -0.35, 0.35);
