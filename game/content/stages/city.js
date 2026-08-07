@@ -283,8 +283,10 @@ function buildStageCity(P) {
   underGlow.position.set(0, -carH / 2 - 5, 0);
   train.add(underGlow);
   const baseY = railY - carH / 2 - 3;
-  const trStopA = railX0 - 10, trStopB = railX1 + 10;
-  train.position.set(trStopA + 60, baseY, railZ + 8);
+  // Stops sit just inside the skyline edges so the shuttle stays on the visible
+  // skyline the whole way - and it starts mid-skyline, moving, the moment the stage builds.
+  const trStopA = railX0 + 40, trStopB = railX1 - 60;
+  train.position.set(CW / 2, baseY, railZ + 8);
   stageGroup.add(train);
   // --- Two elevated stations: glowing platforms + slim canopies at each end. ---
   const mkStation = sx => {
@@ -315,8 +317,8 @@ function buildStageCity(P) {
   mkStation(trStopB);
   stageData.train = {
     group: train, headLamps: headLamps, underGlow: underGlow,
-    stops: [trStopA, trStopB], speed: 85, dir: 1, phase: 'run',
-    t: 0, holdT: 3.5 + Math.random() * 2, baseY: baseY,
+    stops: [trStopA, trStopB], speed: 135, dir: 1, phase: 'run',
+    t: 0, holdT: 2 + Math.random() * 1.5, baseY: baseY,
   };
 
   /* --- Utility cables sagging across the upper sky (static lines) --- */
